@@ -1,0 +1,92 @@
+PARIS 2193 — NIVEAU 1 « CHEZ NOUS », VERSION 2 (PROPOSITION, rien n'est codé)
+Retours pris en compte : claustro permanent, couloirs de 2 à 3 m, tracé qui tourne et se replie, culs-de-sac,
+cour petite et encombrée, pas de grande ligne droite, pas de gros immeubles « décor » : c'est le tracé lui-même qui serre.
+
+=== 1) PLAN AU SOL — 1 caractère = 1 m, nord en haut ===
+Légende : # masse (murs)   . libre   T tour (escalier)   D porte de la tour (départ extérieur)
+          = passage COUVERT (plafond bas, très sombre)   G grille fermée (cul-de-sac dans le noir)
+          B benne-cachette   L casier-cachette   W bâche-cachette   c caisses (couverture basse)
+          F fût qui brûle (lumière = visible)   X policier (patrouille/garde)   N contact (porte du fond)
+
+     0         1         2         3         4         5         6   
+     0123456789012345678901234567890123456789012345678901234567890123
+r00  ################################################################
+r01  ################################################################
+r02  ################################################################
+r03  #####################################GG#########################
+r04  #####################################..#########################
+r05  #####################################..#########################
+r06  ##################################.........#####################
+r07  ##################################.........#####################
+r08  ####################................c..........W.###############
+r09  ######..############.......##.........X..........###############
+r10  ######L.############...##..#######....F....#####################
+r11  ######..############.c.##..#######.......c.#####################
+r12  ######..############...##..#######.........#####################
+r13  ######..############...##..###########..########################
+r14  ######..############...##B.###########..########################
+r15  ###.........########...##..###########..########################
+r16  ###..c....F.########...###############..#################.....##
+r17  ###.......c...........################..#################.....##
+r18  ###.....X......c......################..#################.....##
+r19  ###...................################.......c.......====.N...##
+r20  ###.B....c..##########################...c...........====.....##
+r21  ###.........#############################################.....##
+r22  ###TTTTDTTTT#############################################.....##
+r23  ###TTTTTTTTT####################################################
+r24  ###TTTTTTTTT####################################################
+r25  ###TTTTTTTTT####################################################
+r26  ###TTTTTTTTT####################################################
+r27  ###TTTTTTTTT####################################################
+r28  ###TTTTTTTTT####################################################
+r29  ###TTTTTTTTT####################################################
+r30  ################################################################
+r31  ################################################################
+r32  ################################################################
+r33  ################################################################
+
+PARCOURS (linéaire, 5 « pièces » enchaînées) :
+ 1. Cour (9x7 m, encombrée) : sortie de la tour par D. 1 patrouilleur qui tourne autour des caisses. Cul-de-sac nord (casier) = cachette.
+ 2. Ruelle 1 puis virage au nord (3 m -> 2 m) : on perd la cour de vue, aucune ligne droite > 10 m.
+ 3. Ruelle 3 : couloir de 2 m avec un PINCEMENT d'1 m (on se faufile). Cul-de-sac sud avec une benne (cachette, piège si on s'y enferme).
+ 4. Placette (9x7 m) : le seul endroit « ouvert », 1 garde, un fût qui brûle, deux caisses, sortie nord = grille fermée (cul-de-sac),
+    cul-de-sac est avec une bâche (cachette). La vraie sortie est la plus étroite : descente au sud (2 m).
+ 5. Ruelle 4 (2 m) -> PASSAGE COUVERT (8 m, plafond bas, noir) -> petite cour du contact : porte du fond, livraison avec E.
+Murs : droits, mais avec des ressauts de 0,5 m, des pans coupés à 45° aux coins, des tuyaux/auvents/linge/câbles qui rétrécissent encore le passage (ruelle à 2-2,5 m utile).
+Toujours cubique (niches pour portes/fenêtres) ; détails légers instanciés (tuyaux, câbles, linge, caisses, sacs), graffitis PLUS TARD.
+
+=== 2) L'IMMEUBLE (escalier style New York, 4 étages) — vue de dessus d'UN étage, 1 caractère = 0,5 m ===
+     ##################
+     #  P1   |  P2   #     P1/P2 = portes de voisins numérotées (étage 3 : 31/32, étage 2 : 21/22, étage 1 : 11/12)
+     #        |       #
+     ###  ##########  #     palier carré + garde-corps de fer (R) autour de la cage
+     #  R============R #
+     #  R  CAGE vide R #     escalier carré (volées droites, demi-paliers), cage ouverte vers le haut
+     #  R============R #
+     ###  ##########  #
+     #  marches ↑     #
+     ##################
+ - Appartement tout en haut (étage 4, y = 12 m), 3 étages de voisins (portes seulement pour l'instant), hall au rez.
+ - Lumière différente à chaque étage (une ampoule nue qui grésille, un néon mort, une cage de fer, une fenêtre de palier).
+ - Garde-corps carrés, marches usées, boîtes aux lettres au hall, vélo cassé, sacs.
+
+=== 3) L'APPARTEMENT = chambre de Neo (Matrix), 1 caractère = 0,5 m ===  (photos fournies)
+        fenêtre à barreaux (mur nord, lumière verdâtre)
+     ###########[ ]####################
+     #étagère livres  lampe rouge   M #     M = placard vert + micro-ondes
+     #                ┌─────────────┐ #
+     #                │ BUREAU EN L │ #     moniteurs CRT beige (1 allumé, vert), clavier, imprimante,
+     # LIT défait     │ CRT  CRT clav │ #   téléphone, tasses, CD, papiers, boîtiers, tours d'ordi ouvertes
+     # + 2 oreillers  └──┐ imprimante #
+     #                   │ chaise     #     câbles partout au sol et qui pendent du plafond
+     #  (clé USB sur la table de nuit) #
+     ###########[porte]################
+ - Dominante vert sulfureux, murs sales vert-gris, parquet foncé, quasi pas de lumière sauf l'écran + une lampe.
+ - Tout en volumes simples + beaucoup de petits objets (boîtes, câbles instanciés) pour le fouillis.
+
+=== 4) À VALIDER ===
+ a) Le tracé te plaît ? plus étroit / plus tordu / plus de culs-de-sac ? des endroits à ajouter ou à supprimer ?
+ b) 1 patrouilleur + 1 garde : assez ? (les flics sont lents maintenant)
+ c) Les cachettes (casier, benne, bâche) bien placées ?
+ d) Le passage couvert dans le noir avant le contact : oui / non ?
+Si tu confirmes : j'implémente tout (carte, escalier 4 étages, chambre de Neo).
