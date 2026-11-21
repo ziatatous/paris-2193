@@ -22,8 +22,8 @@
     G.loadSettings();
     progress(0.05, 'Rendu'); G.initRender(canvas); await tick();
     progress(0.2, 'Matières : béton, rouille, asphalte'); G.buildMaterials(); await tick();
-    progress(0.5, 'Immeuble, escalier, rue'); G.buildWorld(); await tick();
-    progress(0.85, 'Police'); G.initCops();
+    if (G.mode === 'sandbox') { progress(0.5, 'Grande carte (ancienne)'); G.buildWorld(); await tick(); progress(0.85, 'Police'); G.initCops(); }
+    else { progress(0.5, 'Niveau 1 : chez nous'); G.buildBase(); G.buildTower(); G.buildLevel1(); await tick(); }
     progress(0.9, 'Joueur'); G.initPlayer(); G.updateLamps(0, 0); G.render(0);
     progress(1, 'Prêt');
     last = performance.now(); requestAnimationFrame(loop);
@@ -35,6 +35,7 @@
     G.audio.init(); G.audio.resume();
     playing = true; last = performance.now();
     try { const r = canvasEl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* tant pis : clic maintenu pour tourner */ }
+    if (G.completed) { G.completed = false; G.resetLevel(); }
     if (!started) { started = true; intro(); }
   };
 
@@ -46,6 +47,7 @@
     setTimeout(() => { t.style.opacity = 0; }, 3400);
     setTimeout(() => { f.style.transition = 'opacity 5s ease-out'; f.style.opacity = 0; }, 4200);
     setTimeout(() => { const h = el('hint'); h.style.opacity = 1; setTimeout(() => { h.style.opacity = 0; }, 9000); }, 9500);
+    setTimeout(() => { if (G.objective) G.say(G.objective, 6000); }, 13000);
   }
 
   function pause() {
@@ -53,12 +55,14 @@
     el('enter-text').textContent = 'PAUSE'; el('enter-sub').textContent = 'cliquer pour reprendre'; el('enter').hidden = false;
   }
 
+  G.endLevelScreen = function (t, sub) { playing = false; try { document.exitPointerLock(); } catch (e) {} el('enter-text').textContent = t; el('enter-sub').textContent = sub; el('enter').hidden = false; };
+
   function bindInput() {
     addEventListener('keydown', e => {
       G.keys[e.code] = true;
       if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
       if (e.key && e.key.toLowerCase() === 'm') G.audio.toggleMusic();   // la lettre M, quelle que soit la disposition du clavier
-      if (e.code === 'KeyE' && playing && G.focus) G.focus.use();
+      if (e.code === 'KeyE' && playing) { if (G.hidden) G.hidden.exit(); else if (G.focus) G.focus.use(); }
     });
     addEventListener('keyup', e => { G.keys[e.code] = false; });
     addEventListener('blur', () => { for (const k in G.keys) G.keys[k] = false; });
@@ -76,7 +80,13 @@
   }
 
   // Quel objet le joueur regarde-t-il, de près ? (une seule indication discrète à l'écran)
+  function updateHidden(dt) {                                              // caché : on ne bouge plus, on regarde par la fente
+    const P = G.P, h = G.hidden; P.vx = P.vz = 0;
+    let da = P.yaw - h.facing; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283;
+    P.yaw = h.facing + G.clamp(da, -1.0, 1.0); P.pitch = G.clamp(P.pitch, -0.25, 0.35);
+  }
   function updateInteract() {
+    if (G.hidden) { G.focus = null; const pr = el('prompt'); pr.textContent = '[E]  Sortir'; pr.style.opacity = 1; return; }
     const cam = G.camera; cam.getWorldDirection(fwd);
     let best = null, bd = 1e9;
     for (const it of G.interactables) {
@@ -90,7 +100,7 @@
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = G.clamp((now - last) / 1000, 0, 0.05); last = now; time += dt;   // jamais négatif ni trop grand
-    if (playing) { if (!G.frozen) G.updatePlayer(dt); G.updateCops(dt); updateInteract(); }
+    if (playing) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); updateInteract(); }
     G.updateCamera(dt, time);
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);

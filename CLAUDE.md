@@ -48,7 +48,7 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Choix important (architecture, outil) : proposer 2 options et en recommander une.
 
 ## STRUCTURE DU CODE (v4) — à lire en premier
-- `index.html` : **menu** (JOUER / OPTIONS : qualité, sensibilité, mouvements brouillons, volume, musique, effets) + chargeur. Le jeu ne se charge qu'après « JOUER ». Scripts classiques (pas de modules ES). Ordre des fichiers : **core, render, textures, physics, world, city, places, dressing, cops, player, audio, game** (même liste dans `index.html` ET `build.py`).
+- `index.html` : **menu** (JOUER / OPTIONS : qualité, sensibilité, mouvements brouillons, volume, musique, effets) + chargeur. Le jeu ne se charge qu'après « JOUER ». Scripts classiques (pas de modules ES). Ordre des fichiers : **core, render, textures, physics, world, city, places, dressing, cops, levels, player, audio, game** (même liste dans `index.html` ET `build.py`).
 - `js/core.js` (G, réglages, aléatoire, bruit) · `js/render.js` (rendu basse résolution + **SSAO** + flou/halo/grain/vignette + bord rouge d'alerte) · `js/textures.js` (béton coffré, peinture, façade, asphalte, métal, neige CRT) · `js/physics.js` (obstacles : boîtes ET segments de mur en biais, grille 8 m, `pushOut/groundAt/ceilingAt/blocked/topAhead`) · `js/world.js` (tour : appartement y=9, escalier 3 étages, hall ; lampes ; `G.B` boîte à limites, `G.wall`, corps `G.buildBody`, `G.limb/G.ball`) · `js/city.js` (**tracé** : ruelles, murs, sol, façades ; exporte `G.city`) · `js/places.js` (**lieux** : marché, place, terrasse, ponts, viaduc, garage, barrages, pylônes, métro, épaves, corps, clé USB ; `G.makeCop`) · `js/dressing.js` (**crasse et détails** : sang, mains, écritures, humidité, devantures, câbles, débris) · `js/cops.js` (police) · `js/player.js` (mouvement) · `js/audio.js` (lit les fichiers de `audio/`) · `js/game.js` (boot, boucle, entrées, E, intro).
 - Un seul objet global `G` ; chaque fichier y ajoute ses fonctions et ne fait rien avant `G.boot()`.
 - **`python3 build.py`** -> `dist/paris2193.html` (tout en un, image du menu intégrée) et `dist/paris2193.artifact.html` (sans `<!doctype>`, pour l'Artifact) + regénère `audio/manifest.json`. **`jouer.bat` / `python3 serve.py`** = serveur local (nécessaire pour entendre les sons de `audio/`).
@@ -138,3 +138,13 @@ Carte v2 implémentée + dressing Outlast + police (voir plus haut). Avant : car
 - [ ] Étape 3 — Brouillard, lumière faible, néons qui grésillent.
 - [ ] Étape 4 — Le corps au sol.
 - [ ] Étape 5 — Sons d'ambiance (générés par code) + pas.
+
+## NIVEAUX (v7) — structure actuelle
+- Menu : **JOUER** = niveau 1 (`G.mode='level'`) ; **GRANDE CARTE (ancienne)** = bac à sable (`G.mode='sandbox'`, ancienne ville conservée).
+- `js/levels.js` : `G.facade(...)` = murs CUBIQUES à deux couches (0,3 + 0,3 m) ; fenêtres/portes/rideaux de fer sont posés DANS des niches, donc rien ne dépasse. `G.buildLevel1()`, `G.resetLevel()`, `G.levelComplete()`.
+- **Niveau 1 « Chez nous »** (livré) : appartement (clé USB près du lit) -> escalier -> hall -> cour (1 patrouilleur) -> ruelle -> place du contact (1 garde). E sur le contact avec la clé = fin de niveau.
+- **Échec = retour immédiat au début du niveau** (style Hotline Miami, punitif).
+- **Cachettes (les trois)** : (a) entrer avec E (benne, casier, tas de caisses sous bâche ; un flic qui te voit entrer peut fouiller), (b) couvertures basses accroupi, (c) l'ombre réduit la visibilité (fûts qui brûlent = plus visible).
+- Niveaux prévus : 2 « Le marché » (furtivité), 3 « Les toits » (parkour, drone), 4 **égouts jusqu'au garage** (choix de l'utilisateur).
+- Idée à garder : brancher la clé sur un ordinateur, pirater la GLACE (plongée en vecteurs, backlog 3).
+- Tests : `G.cops.length=0` + AmbientLight pour voir les façades ; vérifié : chargement sans erreur, clé -> cachette -> livraison -> reset, arrestation -> reset.

@@ -193,6 +193,8 @@
       G.addLamp({ x: w.mx + w.nx * 0.8, y: m.position.y, z: w.mz + w.nz * 0.8, color: col, I: 0.5, dist: 7, halo: 1.6, flicker: 0.8 }); }
   }
 
+  G.dress = { TEX, ctex, decalMat, decals, ground, signTex, SIGNS, chalk, PHRASES };
+
   G.buildDressing = function (walls) {
     wallDecals(walls); shopfronts(walls); windows(walls); wallStuff(walls); cables(); clutter(); neons(walls);
   };

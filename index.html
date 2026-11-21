@@ -12,6 +12,7 @@
     letter-spacing: .5em; font-size: clamp(1.1rem, 3.2vw, 2rem); color: var(--hot); }
   #prompt, #caption, #hint { position: fixed; left: 0; right: 0; text-align: center; pointer-events: none; z-index: 4; opacity: 0; transition: opacity .6s;
     padding: 0 max(16px, env(safe-area-inset-left, 0px)); text-shadow: 0 0 6px #000, 0 0 2px #000; }
+  #slit { position: fixed; inset: 0; pointer-events: none; z-index: 3; display: none; background: linear-gradient(#000 0, #000 33%, transparent 33%, transparent 62%, #000 62%); }
   #prompt { bottom: 28%; font-size: .95rem; letter-spacing: .12em; color: var(--hot); }
   #caption { bottom: 14%; font-size: .95rem; color: var(--fg); }
   #hint { bottom: 6%; font-size: .78rem; letter-spacing: .1em; color: var(--dim); }
@@ -60,7 +61,7 @@
 </style>
 
 <canvas id="game"></canvas>
-<div id="fade"></div>
+<div id="fade"></div><div id="slit"></div>
 <div id="title">PARIS &nbsp;·&nbsp; 2193</div>
 <div id="prompt"></div><div id="caption"></div><div id="hint">Z Q S D  marcher &nbsp;·&nbsp; Maj  courir &nbsp;·&nbsp; Espace  sauter / franchir &nbsp;·&nbsp; C  glisser, rouler &nbsp;·&nbsp; F  dash &nbsp;·&nbsp; E  interagir</div>
 
@@ -71,6 +72,7 @@
     <h1>PARIS 2193</h1>
     <p class="sub">PROTOTYPE &nbsp;·&nbsp; v3</p>
     <button id="b-play">JOUER</button>
+    <button id="b-sandbox">GRANDE CARTE (ancienne)</button>
     <button id="b-opt">OPTIONS</button>
   </div>
   <div class="panel" id="p-opt" hidden>
@@ -107,7 +109,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'places', 'dressing', 'cops', 'player', 'audio', 'game'];
+  const FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'places', 'dressing', 'cops', 'levels', 'player', 'audio', 'game'];
   const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };
@@ -136,8 +138,8 @@
   function setBar(p, msg) { $('bar').firstElementChild.style.width = Math.round(p * 100) + '%'; if (msg) $('loadmsg').textContent = msg; }
 
   let busy = false;
-  $('b-play').addEventListener('click', async () => {
-    if (busy) return; busy = true; show('p-load'); setBar(0.02, 'Chargement du code');
+  async function launch(mode) {
+    if (busy) return; busy = true; G.mode = mode; show('p-load'); setBar(0.02, 'Chargement du code');
     try {
       for (let i = 0; i < FILES.length; i++) {
         if (!G.loaded.includes(FILES[i])) await loadScript('js/' + FILES[i] + '.js');
@@ -149,7 +151,9 @@
     } catch (err) {
       busy = false; $('loadmsg').textContent = 'Erreur : ' + err.message + ' (ouvre la console F12 pour le détail)'; console.error(err);
     }
-  });
+  }
+  $('b-play').addEventListener('click', () => launch('level'));
+  $('b-sandbox').addEventListener('click', () => launch('sandbox'));
   $('enter').addEventListener('click', () => { $('enter').hidden = true; G.start(); });
 })();
 </script>

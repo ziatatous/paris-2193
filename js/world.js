@@ -7,7 +7,7 @@
 (function () {
   'use strict';
   const G = window.G, T = G.T;
-  G.lamps = []; G.interactables = []; G.animated = [];
+  G.lamps = []; G.interactables = []; G.animated = []; G.onReset = [];
 
   /* ---------------------------------------------------------------
      BRIQUES DE BASE
@@ -185,11 +185,13 @@
     const glint = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0xdfe8ff, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.0 }));
     glint.position.set(1.35, 9.8, -1.05); glint.scale.set(0.16, 0.16, 1); G.scene.add(glint);
     G.animated.push({ update(dt) { if (lighter.visible) glint.material.opacity = 0.18 + 0.12 * Math.sin(performance.now() / 700); else glint.material.opacity = 0; } });
-    G.interactables.push({
+    const lighterItem = {
       id: 'lighter', pos: new T.Vector3(1.35, 9.78, -1.05), radius: 1.9, prompt: 'Ramasser le briquet',
       use() { lighter.visible = false; G.interactables = G.interactables.filter(i => i.id !== 'lighter'); G.have = G.have || []; G.have.push('bic-gris');
         G.say('Un Bic gris. Un classique. Le premier de la collection.'); if (G.audio.flick) G.audio.flick(); }
-    });
+    };
+    G.interactables.push(lighterItem);
+    G.onReset.push(() => { lighter.visible = true; if (!G.interactables.includes(lighterItem)) G.interactables.push(lighterItem); });
   }
 
   /* ---------------------------------------------------------------
@@ -234,13 +236,21 @@
   /* ---------------------------------------------------------------
      POINT D'ENTRÉE : construit tout (appelé une fois par G.boot)
      --------------------------------------------------------------- */
-  G.buildWorld = function () {
+  // Socle commun (ciel, brouillard, lumières) ; la tour (appartement + escalier + hall) ; puis, selon le mode, la grande carte ou un niveau
+  G.buildBase = function () {
     glowTex = G.glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']]);
     G.scene.background = new T.Color(0x161b1e);
     G.scene.fog = new T.FogExp2(0x161b1e, 0.105);
-    G.scene.add(new T.HemisphereLight(0x5d6a73, 0x252a2c, 1.35));         // ciel gris-bleu en haut, sol sombre en bas
+    G.scene.add(new T.HemisphereLight(0x5d6a73, 0x252a2c, 1.35));
     G.pool = [0, 1, 2].map(() => { const l = new T.PointLight(0xffffff, 0, 10, 2); G.scene.add(l); return l; });
-    buildTower(); G.buildCity();
+  };
+  G.buildTower = function () { buildTower(); };
+  G.buildWorld = function () { G.buildBase(); buildTower(); G.buildCity(); };          // grande carte (ancienne)
+  // Niveau de lumière en un point : sert à la furtivité (dans le noir, on est moins visible)
+  G.lightAt = function (x, y, z, except) {
+    let s = 0.12;
+    for (const L of G.lamps) { if (L === except || !(L.I > 0)) continue; const d = Math.hypot(L.pos.x - x, L.pos.y - y, L.pos.z - z); if (d < L.dist) { const k = 1 - d / L.dist; s += L.I * L.level * k * k; } }
+    return s;
   };
 
   G.loaded.push('world');

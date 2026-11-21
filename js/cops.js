@@ -53,6 +53,40 @@
     const path = []; let n = b; if (!prev.has(b) && a !== b) return path; while (n !== undefined) { path.unshift([nodes[n].x, nodes[n].z]); n = prev.get(n); } return path;
   }
 
+  /* ---------- Navigation sur grille (niveaux) : A* sur des cases de 1 m, puis chemin "tiré" en lignes droites ---------- */
+  G.buildNavGrid = function (x0, x1, z0, z1, cell) {
+    const nx = Math.ceil((x1 - x0) / cell), nz = Math.ceil((z1 - z0) / cell), free = new Uint8Array(nx * nz);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) free[j * nx + i] = G.blocked(x0 + (i + 0.5) * cell, z0 + (j + 0.5) * cell, 1.15, 0.6, 0.45) ? 0 : 1;   // les obstacles <= 1,1 m ne bloquent pas : ils les enjambent
+    G.navGrid = { x0, z0, cell, nx, nz, free };
+  };
+  function gridPath(sx, sz, gx, gz) {
+    const N = G.navGrid, cl = (v, n) => Math.max(0, Math.min(n - 1, v));
+    const cellOf = (x, z) => [cl(Math.floor((x - N.x0) / N.cell), N.nx), cl(Math.floor((z - N.z0) / N.cell), N.nz)];
+    const nearestFree = (i, j) => { if (N.free[j * N.nx + i]) return [i, j]; for (let r = 1; r < 8; r++) for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < N.nx && b < N.nz && N.free[b * N.nx + a]) return [a, b]; } return [i, j]; };
+    const [si, sj] = nearestFree(...cellOf(sx, sz)), [gi, gj] = nearestFree(...cellOf(gx, gz));
+    const idx = (i, j) => j * N.nx + i, g = new Float32Array(N.nx * N.nz).fill(1e9), prev = new Int32Array(N.nx * N.nz).fill(-1), open = [[0, idx(si, sj)]];
+    g[idx(si, sj)] = 0; const h = (i, j) => Math.hypot(i - gi, j - gj), push = (e) => { open.push(e); let k = open.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (open[p][0] <= open[k][0]) break; [open[p], open[k]] = [open[k], open[p]]; k = p; } };
+    const pop = () => { const top = open[0], last = open.pop(); if (open.length) { open[0] = last; let k = 0; for (;;) { let l = 2 * k + 1, r = l + 1, m = k; if (l < open.length && open[l][0] < open[m][0]) m = l; if (r < open.length && open[r][0] < open[m][0]) m = r; if (m === k) break; [open[m], open[k]] = [open[k], open[m]]; k = m; } } return top; };
+    let found = false;
+    while (open.length) {
+      const cur = pop()[1], ci = cur % N.nx, cj = (cur - ci) / N.nx; if (ci === gi && cj === gj) { found = true; break; }
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        if (!di && !dj) continue; const a = ci + di, b = cj + dj; if (a < 0 || b < 0 || a >= N.nx || b >= N.nz || !N.free[idx(a, b)]) continue;
+        if (di && dj && (!N.free[idx(ci + di, cj)] || !N.free[idx(ci, cj + dj)])) continue;           // pas de coupe-angle à travers un coin
+        const ng = g[cur] + (di && dj ? 1.414 : 1); if (ng < g[idx(a, b)]) { g[idx(a, b)] = ng; prev[idx(a, b)] = cur; push([ng + h(a, b), idx(a, b)]); }
+      }
+    }
+    if (!found) return [];
+    const raw = []; for (let n = idx(gi, gj); n >= 0; n = prev[n]) { const i = n % N.nx, j = (n - i) / N.nx; raw.unshift([N.x0 + (i + 0.5) * N.cell, N.z0 + (j + 0.5) * N.cell]); }
+    const out = []; let a = 0;                                                                         // "tirer" le chemin : on saute les points inutiles quand la vue est libre
+    while (a < raw.length - 1) { let b = raw.length - 1; while (b > a + 1 && !G.los(raw[a][0], 1, raw[a][1], raw[b][0], 1, raw[b][1])) b--; out.push(raw[b]); a = b; }
+    return out;
+  }
+  function computePath(x, z, tx, tz) {
+    if (G.navGrid) return gridPath(x, z, tx, tz);
+    const a = nearestNode(x, z), b = nearestNode(tx, tz); return a >= 0 && b >= 0 ? astar(a, b) : [];
+  }
+
   /* ---------- Un policier ---------- */
   function addCop(group, home, facing, patrol) {
     const c = { g: group, x: home[0], z: home[1], y: 0, facing, home: home.slice(), homeFacing: facing, patrol: patrol || null, pi: 0, state: 'idle', alert: 0, last: null, lostT: 0, searchT: 0,
@@ -62,14 +96,22 @@
   }
   function eyePos() { const P = G.P; return [P.pos.x, P.pos.y + 1.2, P.pos.z]; }
 
+  // Accroupi derrière un obstacle bas du côté du policier : la ligne de vue est cassée (couverture basse)
+  function coverBetween(c) {
+    const P = G.P, dx = c.x - P.pos.x, dz = c.z - P.pos.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+    for (const t of [0.55, 1.0, 1.5]) if (G.blocked(P.pos.x + ux * t, P.pos.z + uz * t, 0.45, 0.2, 0.14)) return true;
+    return false;
+  }
   function perceive(c, dt) {
     const P = G.P, dx = P.pos.x - c.x, dz = P.pos.z - c.z, dist = Math.hypot(dx, dz);
-    let range = 20 * (P.h < 1.5 && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1);
+    const crouched = P.h < 1.5, hidden = !!G.hidden;
+    const lf = G.clamp(0.45 + G.lightAt(P.pos.x, P.pos.y + 1, P.pos.z, c.lamp) * 0.85, 0.45, 1.4);        // dans le noir on est moins visible, près d'une flamme on l'est plus
+    const range = 20 * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
     const dot = dist > 0.01 ? (dx * Math.sin(c.facing) + dz * Math.cos(c.facing)) / dist : 1;
-    const e = eyePos();
-    const sees = !G.arrest && dist < range && (dist < 3 || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]);
+    const e = [P.pos.x, P.pos.y + (crouched ? 0.7 : 1.2), P.pos.z];
+    const sees = !G.arrest && !hidden && dist < range && (dist < 3 || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));
     const noise = P.mode === 'slide' || P.dashT > 0 ? 12 : P.sprint ? 8 : P.mode === 'wallrun' ? 9 : (P.speed > 1 && P.h > 1.5) ? 3 : 1;
-    const hears = !G.arrest && !sees && dist < noise && Math.abs(P.pos.y - c.y) < 3;
+    const hears = !G.arrest && !hidden && !sees && dist < noise && Math.abs(P.pos.y - c.y) < 3;
     if (sees) { c.alert = Math.min(1.5, c.alert + dt * (0.9 + (1 - dist / range) * 1.6)); c.last = [P.pos.x, P.pos.z]; c.lostT = 0; }
     else if (hears) { c.alert = Math.min(1.5, c.alert + dt * 0.55); c.last = [P.pos.x + (Math.random() - 0.5) * 3, P.pos.z + (Math.random() - 0.5) * 3]; }
     else if (c.state !== 'chase') c.alert = Math.max(0, c.alert - dt * 0.18);
@@ -82,7 +124,7 @@
     const direct = dist < 14 && G.los(c.x, c.y + 1, c.z, tx, c.y + 1, tz);
     if (!direct) {
       c.pathT -= dt;
-      if (c.pathT <= 0 || force) { c.pathT = 0.7; const a = nearestNode(c.x, c.z), b = nearestNode(tx, tz); c.path = a >= 0 && b >= 0 ? astar(a, b) : []; c.path.push([tx, tz]); }
+      if (c.pathT <= 0 || force) { c.pathT = 0.7; c.path = computePath(c.x, c.z, tx, tz); c.path.push([tx, tz]); }
       while (c.path.length > 1 && Math.hypot(c.path[0][0] - c.x, c.path[0][1] - c.z) < 1.6) c.path.shift();
       if (c.path.length) { gx = c.path[0][0]; gz = c.path[0][1]; }
     }
@@ -100,6 +142,13 @@
 
   function think(c, dt) {
     const pc = perceive(c, dt);
+    if (G.hidden && c.state !== 'idle') {                                   // le joueur est caché : le policier vient voir
+      const h = G.hidden, d = Math.hypot(h.x - c.x, h.z - c.z);
+      if (d < 3) { c.hideT = (c.hideT || 0) + dt; c.last = [h.x, h.z]; c.speed *= 0.8;
+        if (h.compromised && c.hideT > 1.3) { arrest(c); return; }                                      // il t'a vu entrer : il t'en sort
+        if (!h.compromised && c.hideT > 3.5) { c.state = 'search'; c.searchT = 1.5; c.alert = 0.2; c.last = [c.home[0], c.home[1]]; c.hideT = 0; }   // rien trouvé : il s'en va
+      } else c.hideT = 0;
+    }
     switch (c.state) {
       case 'idle':
         if (c.alert >= 0.35) { c.state = 'suspicious'; break; }
@@ -167,19 +216,25 @@
   function arrest(c) {
     if (G.arrest) return;
     G.arrest = { t: 0 }; G.frozen = true; const P = G.P; P.vx = P.vz = 0;
-    snd('fx', 'arrest', 1); G.say && G.say('Arrêté.', 3000);
-    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.9s'; f.style.opacity = 1; }
+    snd('fx', 'arrest', 1); G.say && G.say('ARRÊTÉ', 900);
+    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.25s'; f.style.opacity = 1; }
   }
+  // Sans niveau (grande carte) : retour devant la tour
   function respawn() {
     const P = G.P; P.pos.set(0, 0, -6); P.yaw = 0; P.pitch = 0; P.vx = P.vy = P.vz = 0; P.mode = 'move'; P.anim = null; P.onGround = true; P.h = 1.75; P.stunT = 0; P.eye = 1.62; P.safe.set(0, 0, -6);
-    for (const c of cops) { c.x = c.home[0]; c.z = c.home[1]; c.y = 0; c.state = 'idle'; c.alert = 0; c.last = null; c.path = []; c.facing = c.homeFacing; c.speed = 0; }
-    G.alert = 0; G.arrest = null; G.frozen = false;
-    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 2.5s'; f.style.opacity = 0; }
-    G.say && G.say('Ils t\'ont relâché. Pour cette fois.', 4500);
+    G.resetCops(); G.alert = 0; G.arrest = null; G.frozen = false;
   }
+  G.resetCops = function () { for (const c of cops) { c.x = c.home[0]; c.z = c.home[1]; c.y = 0; c.state = 'idle'; c.alert = 0; c.last = null; c.path = []; c.facing = c.homeFacing; c.speed = 0; c.pi = 0; c.wait = 0; c.hideT = 0; } };
+  G.addCop = addCop;
 
   G.updateCops = function (dt) {
-    if (G.arrest) { G.arrest.t += dt; if (G.arrest.t > 2.3) respawn(); }
+    if (G.arrest) {
+      G.arrest.t += dt;
+      if (G.arrest.t > 0.6) {                                                  // noir quasi instantané, puis on repart tout de suite
+        (G.resetLevel || respawn)();
+        const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.45s'; f.style.opacity = 0; }
+      }
+    }
     let top = 0;
     for (const c of cops) { think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
     G.alert += (top - G.alert) * Math.min(1, dt * 3);

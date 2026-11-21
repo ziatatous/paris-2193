@@ -31,3 +31,6 @@ Pour ajouter un nouvel élément plus tard (porte, tonneau...), dis-le-moi : je 
 
 ## Version en ligne (lien claude.ai)
 Les sons ne sont lus que si les fichiers sont publiés avec le jeu. Demande-moi de les inclure quand tu en as.
+
+- `hide/` : son quand on entre/sort d'une cachette.
+- `deliver/` : son de la livraison de la clé.
