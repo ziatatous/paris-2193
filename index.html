@@ -50,17 +50,17 @@ function rnd() { _s |= 0; _s = _s + 0x6D2B79F5 | 0; let t = Math.imul(_s ^ _s >>
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /* =====================================================================
-   1. RENDU BASSE RÉSOLUTION (look PS1)
+   1. RENDU BASSE RÉSOLUTION (look rétro, mais plus fin)
    On dessine en 360 pixels de haut, le CSS agrandit sans lisser (pixelated).
    ===================================================================== */
 const canvas = document.getElementById('c');
 const renderer = new T.WebGLRenderer({ canvas, antialias: false });
-const INTERNAL_H = 360;
+const INTERNAL_H = 480;
 const FOG_COLOR = 0x07090c;
 
 const scene = new T.Scene();
 scene.background = new T.Color(FOG_COLOR);
-scene.fog = new T.FogExp2(FOG_COLOR, 0.085);   // brouillard épais : on voit ~15 m
+scene.fog = new T.FogExp2(FOG_COLOR, 0.08);   // brouillard épais : on voit ~15 m
 
 const camera = new T.PerspectiveCamera(75, 16 / 9, 0.1, 60);
 camera.rotation.order = 'YXZ';                 // d'abord tourner à gauche/droite (Y), puis haut/bas (X)
@@ -77,127 +77,432 @@ addEventListener('resize', resize);
 resize();
 
 /* =====================================================================
-   2. TEXTURES PROCÉDURALES (dessinées par code, 64x64, pixels nets)
+   2. TEXTURES PROCÉDURALES (dessinées par code, 128x128)
+   Chaque texture a deux images : la COULEUR et une carte de RELIEF (bump map) qui
+   donne du volume aux briques, aux pavés, à la rouille quand une lumière passe dessus.
    ===================================================================== */
-const TS = 64;
-function makeTexture(painter) {
-  const c = document.createElement('canvas');
-  c.width = c.height = TS;
-  const g = c.getContext('2d');
-  const img = g.createImageData(TS, TS);
-  const px = (x, y, r, gg, b) => {
-    const i = (y * TS + x) * 4;
-    img.data[i] = clamp(r, 0, 255); img.data[i + 1] = clamp(gg, 0, 255); img.data[i + 2] = clamp(b, 0, 255); img.data[i + 3] = 255;
-  };
-  painter(px);
-  g.putImageData(img, 0, 0);
-  const t = new T.CanvasTexture(c);
-  t.magFilter = T.NearestFilter;               // pixels nets, pas de flou
-  t.minFilter = T.NearestFilter;
-  t.wrapS = t.wrapT = T.RepeatWrapping;
-  return t;
-}
 const hash2 = (a, b) => { const h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return h - Math.floor(h); };
+const smooth = t => t * t * (3 - 2 * t);
 
-// Briques : rangées de 8 px, briques de 16 px, une rangée sur deux décalée.
-const texBrick = makeTexture(px => {
-  for (let y = 0; y < TS; y++) {
-    const row = Math.floor(y / 8), off = row % 2 ? 8 : 0;
-    for (let x = 0; x < TS; x++) {
-      const xx = (x + off) % TS, col = Math.floor(xx / 16);
-      const grain = 0.8 + rnd() * 0.3;
-      if (y % 8 === 0 || xx % 16 === 0) px(x, y, 30 * grain, 28 * grain, 26 * grain);   // mortier
-      else { const v = hash2(col, row); px(x, y, (76 + v * 30) * grain, (33 + v * 13) * grain, (26 + v * 10) * grain); }
-    }
-  }
-});
-// Surface bruitée (asphalte, béton, rouille...) : couleur de base + taches + grain.
-function noiseTexture(base, amount, blotch) {
-  return makeTexture(px => {
-    for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
-      const k0 = Math.sin(x * 6.2832 * 3 / TS) + Math.sin(y * 6.2832 * 2 / TS + 1) + Math.sin((x + y) * 6.2832 * 2 / TS + 2);
-      let k = 1 + k0 / 3 * blotch + (rnd() - 0.5) * 2 * amount;
-      if (rnd() < 0.02) k += 0.35;               // petits éclats clairs
-      px(x, y, base[0] * k, base[1] * k, base[2] * k);
-    }
-  });
+// Bruit "doux" qui se répète sans couture (value noise sur une grille cells x cells)
+function makeNoise(S, cells, seed) {
+  let s = seed; const g = [];
+  for (let i = 0; i < cells * cells; i++) { s = (s * 16807) % 2147483647; g.push(s / 2147483647); }
+  return (x, y) => {
+    const fx = x / S * cells, fy = y / S * cells, x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = smooth(fx - x0), ty = smooth(fy - y0);
+    const X0 = ((x0 % cells) + cells) % cells, X1 = (X0 + 1) % cells, Y0 = ((y0 % cells) + cells) % cells, Y1 = (Y0 + 1) % cells;
+    const a = g[Y0 * cells + X0], b = g[Y0 * cells + X1], c = g[Y1 * cells + X0], d = g[Y1 * cells + X1];
+    return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+  };
 }
-const mat = (tex, shin = 0) => new T.MeshPhongMaterial({ map: tex, shininess: shin, specular: 0x111111 });
+// Plusieurs bruits de tailles différentes superposés = aspect naturel (taches, saletés)
+function fbm(S) { const a = makeNoise(S, 4, 11), b = makeNoise(S, 8, 23), c = makeNoise(S, 16, 37); return (x, y) => a(x, y) * 0.5 + b(x, y) * 0.3 + c(x, y) * 0.2; }
+// Fissures : des marches aléatoires. Renvoie l'ensemble des pixels fissurés.
+function crackSet(S, count, len) {
+  const set = new Set();
+  for (let n = 0; n < count; n++) {
+    let x = Math.floor(rnd() * S), y = Math.floor(rnd() * S), a = rnd() * 6.28;
+    for (let i = 0; i < len; i++) { a += (rnd() - 0.5) * 0.9; x = (x + Math.round(Math.cos(a)) + S) % S; y = (y + Math.round(Math.sin(a)) + S) % S; set.add(y * S + x); }
+  }
+  return set;
+}
+const MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
+function makeTexturePair(S, fn) {
+  const col = new Uint8ClampedArray(S * S * 4), hgt = new Uint8ClampedArray(S * S * 4);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const p = fn(x, y), i = (y * S + x) * 4;
+    col[i] = p[0]; col[i + 1] = p[1]; col[i + 2] = p[2]; col[i + 3] = 255;
+    hgt[i] = hgt[i + 1] = hgt[i + 2] = p[3] * 255; hgt[i + 3] = 255;
+  }
+  const mk = data => {
+    const c = document.createElement('canvas'); c.width = c.height = S;
+    c.getContext('2d').putImageData(new ImageData(data, S, S), 0, 0);
+    const t = new T.CanvasTexture(c);
+    t.magFilter = T.NearestFilter;                     // pixels nets de près
+    t.minFilter = T.NearestMipmapLinearFilter;         // sans scintillement de loin
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = MAX_ANISO;
+    return t;
+  };
+  return { map: mk(col), bump: mk(hgt) };
+}
+
+// Briques (avec un crépi qui s'écaille si plaster = true)
+function brickFn(S, plaster) {
+  const f = fbm(S), f2 = makeNoise(S, 32, 5), f3 = makeNoise(S, 10, 91), cr = crackSet(S, 5, 50);
+  return (x, y) => {
+    const row = Math.floor(y / 8), off = row % 2 ? 8 : 0, xx = (x + off) % S, col = Math.floor(xx / 16), lx = xx % 16, ly = y % 8;
+    const v = hash2(col, row), g = f(x, y);
+    let r = 92 + v * 36, gg = 40 + v * 16, b = 30 + v * 10, h = 0.72 + rnd() * 0.16;
+    if (lx === 0 || ly === 0) { r = 40; gg = 37; b = 33; h = 0.08; }                                   // mortier
+    else if ((lx === 1 || ly === 1) && rnd() < 0.4) { r *= 0.8; gg *= 0.8; b *= 0.8; h = 0.45; }       // arêtes écaillées
+    let m = (0.45 + g * 0.95) * (0.86 + rnd() * 0.26);                                                 // saleté, suie
+    if (hash2(Math.floor(x / 3), 3) > 0.8) m *= 0.6 + 0.4 * f2(x, y * 0.3);                            // coulures de pluie
+    if (plaster && f3(x + 17, y + 9) + (f2(x, y) - 0.5) * 0.3 > 0.36) {                                                          // crépi gris-beige
+      const q = 0.55 + f2(x, y) * 0.6;
+      r = 140 * q; gg = 134 * q; b = 120 * q; h = 0.8 + f2(x, y) * 0.03; m = 0.65 + g * 0.6;
+      if (cr.has(y * S + x)) { r *= 0.55; gg *= 0.55; b *= 0.55; h = 0.5; }
+    }
+    return [r * m, gg * m, b * m, h];
+  };
+}
+// Pavés : rangées décalées, bords usés et sombres, mousse dans les joints, taches d'huile
+function cobbleFn(S) {
+  const f = fbm(S);
+  return (x, y) => {
+    const row = Math.floor(y / 8), off = row % 2 ? 4 : 0, xx = (x + off) % S, sx = Math.floor(xx / 8), lx = xx % 8, ly = y % 8;
+    const v = hash2(sx, row), dx = Math.abs(lx - 3.5) / 3.5, dy = Math.abs(ly - 3.5) / 3.5, edge = Math.max(dx, dy);
+    let h = 0.8 - edge * edge * 0.25; if (edge > 0.9) h = 0.45;
+    const g = f(x, y), base = 40 + v * 24, m = (0.45 + g * 0.9) * (0.85 + rnd() * 0.3);
+    let r = base * m, gg = (base + 2) * m, b = (base + 6) * m;
+    if (edge > 0.8) { r *= 0.45; gg *= 0.55; b *= 0.45; }
+    if (g > 0.6) { r *= 0.55; gg *= 0.6; b *= 0.7; }                                                    // huile / eau
+    return [r, gg, b, h];
+  };
+}
+// Béton sale avec fissures
+function concreteFn(S) {
+  const f = fbm(S), f2 = makeNoise(S, 32, 7), cr = crackSet(S, 8, 60);
+  return (x, y) => {
+    const g = f(x, y), m = (0.5 + g * 0.9) * (0.88 + rnd() * 0.2);
+    let r = 78 * m, gg = 82 * m, b = 76 * m, h = 0.6 + f2(x, y) * 0.3;
+    if (cr.has(y * S + x)) { r *= 0.25; gg *= 0.25; b *= 0.25; h = 0.05; }
+    if (hash2(Math.floor(x / 3), 5) > 0.85) { r *= 0.75; gg *= 0.75; b *= 0.75; }
+    return [r, gg, b, h];
+  };
+}
+// Métal : peinture écaillée qui laisse voir la rouille. paint = couleur de peinture [r,g,b] ou null (rouille pure)
+function metalFn(S, paint) {
+  const f = fbm(S), f2 = makeNoise(S, 32, 3);
+  return (x, y) => {
+    const g = f(x, y), rust = paint ? g > 0.55 : true;
+    let r, gg, b, h = 0.6 + f2(x, y) * 0.2;
+    if (rust) { const q = 0.6 + f2(x, y) * 0.8; r = 100 * q; gg = 56 * q; b = 32 * q; h = 0.35 + f2(x, y) * 0.3; }
+    else { const q = 0.7 + rnd() * 0.25; r = paint[0] * q; gg = paint[1] * q; b = paint[2] * q; }
+    if (y % 32 === 0) { r *= 0.35; gg *= 0.35; b *= 0.35; h = 0.1; }                                    // joint de tôle
+    if (y % 32 === 3 && x % 8 === 4) { r *= 1.5; gg *= 1.5; b *= 1.5; h = 0.95; }                      // rivets
+    if (hash2(Math.floor(x / 2), 9) > 0.88) { r *= 0.6; gg *= 0.6; b *= 0.6; }                         // coulures
+    return [r, gg, b, h];
+  };
+}
+// Bois : planches, fibres, clous
+function woodFn(S) {
+  const f = fbm(S), n = makeNoise(S, 8, 55);
+  return (x, y) => {
+    const plank = Math.floor(y / 32), ly = y % 32, gr = Math.sin((x * 0.25) + n(x, y) * 8 + plank * 3) * 0.5 + 0.5;
+    const q = (0.55 + gr * 0.35 + f(x, y) * 0.4) * (0.9 + rnd() * 0.15);
+    let r = 62 * q, gg = 44 * q, b = 27 * q, h = 0.7 + gr * 0.1;
+    if (ly === 0 || ly === 31) { r *= 0.25; gg *= 0.25; b *= 0.25; h = 0.05; }
+    if (ly === 6 && (x % 64 === 6 || x % 64 === 58)) { r = gg = b = 150; h = 0.9; }                     // clous
+    return [r, gg, b, h];
+  };
+}
+const cardboardFn = S => { const f = fbm(S); return (x, y) => { const q = (0.6 + f(x, y) * 0.7) * (0.9 + rnd() * 0.15); return [150 * q, 118 * q, 76 * q, 0.5 + (y % 6 === 0 ? 0.2 : 0)]; }; };
+const clothFn = S => { const f = fbm(S); return (x, y) => { const q = (0.55 + f(x, y) * 0.8) * (((x + y) % 2) ? 1 : 0.85); return [30 * q, 32 * q, 37 * q, ((x + y) % 2) ? 0.7 : 0.4]; }; };
+
+function pm(pair, o = {}) {
+  return new T.MeshPhongMaterial({ map: pair.map, bumpMap: pair.bump, bumpScale: o.bump ?? 3, shininess: o.shin ?? 4, specular: o.spec ?? 0x151515 });
+}
 const M = {
-  brick:    mat(texBrick),
-  ground:   mat(noiseTexture([40, 40, 44], 0.12, 0.4), 6),
-  concrete: mat(noiseTexture([66, 71, 66], 0.08, 0.5)),
-  metal:    mat(noiseTexture([78, 52, 34], 0.15, 0.6)),
-  trash:    mat(noiseTexture([20, 23, 20], 0.25, 0.3)),
-  dark:     new T.MeshPhongMaterial({ color: 0x050507, shininess: 0 }),
+  brick:    pm(makeTexturePair(128, brickFn(128, false)), { bump: 1.1 }),
+  plaster:  pm(makeTexturePair(128, brickFn(128, true)),  { bump: 0.5 }),
+  ground:   pm(makeTexturePair(128, cobbleFn(128)), { bump: 0.5, shin: 55, spec: 0x445566 }),      // pavés mouillés : reflets de néon
+  concrete: pm(makeTexturePair(128, concreteFn(128)), { bump: 1.2 }),
+  rust:     pm(makeTexturePair(128, metalFn(128, null)), { bump: 1.2, shin: 18, spec: 0x332a22 }),
+  dumpster: pm(makeTexturePair(128, metalFn(128, [44, 66, 52])), { bump: 1.2, shin: 22, spec: 0x2a3a30 }),
+  wood:     pm(makeTexturePair(128, woodFn(128)), { bump: 1 }),
+  card:     pm(makeTexturePair(128, cardboardFn(128)), { bump: 0.8 }),
+  cloth:    pm(makeTexturePair(128, clothFn(128)), { bump: 0.6 }),
+  iron:     new T.MeshPhongMaterial({ color: 0x0d0d10, shininess: 50, specular: 0x555566 }),
+  frame:    new T.MeshPhongMaterial({ color: 0x2b2a27, shininess: 6 }),
+  glass:    new T.MeshPhongMaterial({ color: 0x05080c, shininess: 140, specular: 0x8aa0c0 }),      // vitres noires : accrochent les néons
+  bag:      new T.MeshPhongMaterial({ color: 0x0b0d0b, shininess: 25, specular: 0x2a302a }),       // sac plastique brillant
+  paper:    new T.MeshPhongMaterial({ color: 0x8d8a80, shininess: 2, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+  puddle:   new T.MeshPhongMaterial({ color: 0x030507, shininess: 200, specular: 0xaab8cc, transparent: true, opacity: 0.88, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
   litwin:   new T.MeshBasicMaterial({ color: 0x6b5530 }),
   tv:       new T.MeshBasicMaterial({ color: 0x2c4a63 }),
 };
 
-/* =====================================================================
-   3. DÉCOR : boîtes avec collisions
-   Axes : X largeur, Y hauteur, Z longueur. Ruelle de z=+20 (départ) à z=-20 (fond), 4 m de large.
-   ===================================================================== */
-const colliders = [];   // liste de boîtes solides (pour les collisions du joueur)
+// Affiches et graffitis : dessinés sur un canvas avec transparence, puis collés au mur
+function posterTexture(kind) {
+  const W = 128, H = kind === 'tag' ? 128 : 176;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); g.textAlign = 'center'; g.textBaseline = 'middle';
+  const bold = (px) => `bold ${px}px "Arial Black", Impact, "DejaVu Sans", sans-serif`;
+  if (kind === 'tag') {                                   // graffiti à la bombe, avec coulures
+    g.fillStyle = '#19d8f0'; g.font = bold(38); g.save(); g.translate(64, 62); g.rotate(-0.1); g.fillText('ZÉRO', 0, 0); g.restore();
+    for (let i = 0; i < 8; i++) { const x = 20 + rnd() * 90; g.fillRect(x, 72, 2, 8 + rnd() * 40); g.fillRect(x - 1, 80 + rnd() * 40, 4, 3); }
+  } else if (kind === 'wanted') {
+    g.fillStyle = '#b8b09a'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#1a1a1a'; g.font = bold(13); g.fillText('AVIS DE RECHERCHE', 64, 14);
+    g.fillStyle = '#3a3a3a'; g.fillRect(24, 28, 80, 76);
+    g.fillStyle = '#121212'; g.beginPath(); g.ellipse(64, 62, 17, 22, 0, 0, 6.28); g.fill();     // silhouette : visage sans traits
+    g.beginPath(); g.ellipse(64, 108, 34, 20, 0, Math.PI, 0); g.fill();
+    g.fillStyle = '#7a1d1b'; g.font = bold(12); g.fillText('РАЗЫСКИВАЕТСЯ', 64, 122);
+    g.fillStyle = '#222'; g.font = bold(10); g.fillText('ANCIEN HOOLIGAN', 64, 140); g.fillText('RÉCOMPENSE 5000 UC', 64, 154);
+  } else if (kind === 'prop') {
+    g.fillStyle = '#7a1d1b'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#e8e2d0'; g.font = bold(32); g.fillText('OBÉIR', 64, 46); g.font = bold(13); g.fillText("C'EST", 64, 74); g.font = bold(23); g.fillText('SURVIVRE', 64, 98);
+    g.fillRect(14, 120, 100, 2); g.font = bold(9); g.fillText("MINISTÈRE DE L'ORDRE", 64, 138);
+  } else {
+    g.fillStyle = '#0f3036'; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#d8e0d0'; g.lineWidth = 3; g.beginPath(); g.ellipse(64, 56, 40, 20, 0, 0, 6.28); g.stroke();   // un oeil qui surveille
+    g.fillStyle = '#d8e0d0'; g.beginPath(); g.arc(64, 56, 11, 0, 6.28); g.fill(); g.fillStyle = '#0f3036'; g.beginPath(); g.arc(64, 56, 5, 0, 6.28); g.fill();
+    g.fillStyle = '#d8e0d0'; g.font = bold(14); g.fillText('VOTRE QUARTIER', 64, 108); g.fillText('VOUS REGARDE', 64, 128);
+  }
+  if (kind !== 'tag') {                                   // déchirures sur les bords + taches d'humidité
+    g.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 26; i++) { const e = Math.floor(rnd() * 4), t = rnd() * (e < 2 ? W : H), s = 2 + rnd() * 9;
+      if (e === 0) g.fillRect(t, 0, s, 2 + rnd() * 6); else if (e === 1) g.fillRect(t, H - 2 - rnd() * 6, s, 8);
+      else if (e === 2) g.fillRect(0, t, 2 + rnd() * 6, s); else g.fillRect(W - 2 - rnd() * 6, t, 8, s); }
+    g.beginPath(); g.moveTo(W, 0); g.lineTo(W - 28, 0); g.lineTo(W, 34); g.fill();   // coin arraché
+    g.globalCompositeOperation = 'source-over';
+    const grd = g.createLinearGradient(0, H * 0.5, 0, H); grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(10,8,4,0.55)');
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  }
+  const t = new T.CanvasTexture(c); t.magFilter = T.NearestFilter; t.minFilter = T.NearestFilter; return t;
+}
+function decalMaterial(tex) {
+  return new T.MeshPhongMaterial({ map: tex, transparent: true, shininess: 3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+}
+// Dégradé noir vertical (coulures d'eau sous les fenêtres)
+function dripTexture() {
+  const c = document.createElement('canvas'); c.width = 16; c.height = 64; const g = c.getContext('2d');
+  for (let x = 0; x < 16; x++) { if (rnd() < 0.45) continue; const len = 20 + rnd() * 44;
+    const gr = g.createLinearGradient(0, 0, 0, len); gr.addColorStop(0, 'rgba(0,0,0,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x, 0, 1 + (rnd() < 0.3 ? 1 : 0), len); }
+  const t = new T.CanvasTexture(c); t.magFilter = T.NearestFilter; t.minFilter = T.NearestFilter; return t;
+}
+// Halo lumineux (néons dans le brouillard) et fumée
+function radialTexture(stops) {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); for (const [o, col] of stops) gr.addColorStop(o, col);
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new T.CanvasTexture(c);
+}
+const glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.35)'], [1, 'rgba(255,255,255,0)']]);
+const smokeTex = radialTexture([[0, 'rgba(200,205,210,0.5)'], [0.6, 'rgba(160,165,170,0.18)'], [1, 'rgba(150,155,160,0)']]);
 
-// Boîte dont les UV (la répétition de texture) suivent la taille réelle : la texture ne s'étire jamais.
+/* =====================================================================
+   3. DÉCOR : formes détaillées + collisions
+   Axes : X largeur, Y hauteur, Z longueur. Ruelle de z=+20 (départ) à z=-20 (fond), 4 m de large.
+   Côté gauche = x -2 (façade en briques), côté droit = x +2 (façade crépie).
+   ===================================================================== */
+const colliders = [];   // boîtes solides pour les collisions du joueur
+
+// Boîte dont la texture se répète selon la taille réelle (tile = mètres par répétition)
 function boxGeo(w, h, d, tile) {
-  const g = new T.BoxGeometry(w, h, d);
-  const uv = g.attributes.uv;
+  const g = new T.BoxGeometry(w, h, d), uv = g.attributes.uv;
   const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];   // ordre des faces : +x -x +y -y +z -z
   for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) {
-    const k = f * 4 + i;
-    uv.setXY(k, uv.getX(k) * dims[f][0] / tile, uv.getY(k) * dims[f][1] / tile);
+    const k = f * 4 + i; uv.setXY(k, uv.getX(k) * dims[f][0] / tile, uv.getY(k) * dims[f][1] / tile);
   }
   return g;
 }
-function addBox(x, y, z, w, h, d, material, tile = 3, collide = true) {
+function addCollider(x, y, z, w, h, d) { colliders.push({ minX: x - w / 2, maxX: x + w / 2, minY: y - h / 2, maxY: y + h / 2, minZ: z - d / 2, maxZ: z + d / 2 }); }
+function addBox(x, y, z, w, h, d, material, tile = 2, collide = true) {
   const m = new T.Mesh(boxGeo(w, h, d, tile), material);
-  m.position.set(x, y, z);
-  scene.add(m);
-  if (collide) colliders.push({ minX: x - w / 2, maxX: x + w / 2, minY: y - h / 2, maxY: y + h / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+  m.position.set(x, y, z); scene.add(m);
+  if (collide) addCollider(x, y, z, w, h, d);
   return m;
 }
-function addBarrel(x, z) {
-  const m = new T.Mesh(new T.CylinderGeometry(0.35, 0.35, 1.0, 8), M.metal);   // 8 côtés = low-poly
-  m.position.set(x, 0.5, z);
-  scene.add(m);
-  colliders.push({ minX: x - 0.3, maxX: x + 0.3, minY: 0, maxY: 1.0, minZ: z - 0.3, maxZ: z + 0.3 });
+function addMesh(geo, material, x, y, z) { const m = new T.Mesh(geo, material); m.position.set(x, y, z); scene.add(m); return m; }
+// Plan collé sur un mur (affiche, tache) : side -1 = mur gauche, +1 = mur droit
+function addDecal(side, z, y, w, h, material) {
+  const m = new T.Mesh(new T.PlaneGeometry(w, h), material);
+  m.position.set(2 * side - side * 0.012, y, z); m.rotation.y = side === -1 ? Math.PI / 2 : -Math.PI / 2; scene.add(m); return m;
+}
+// Barres fines (garde-corps, grille) : toutes dans UN SEUL objet "instancié" pour rester rapide
+const barList = [];
+function addBar(x, y, z, h, thick = 1) { barList.push([x, y, z, h, thick]); }
+function flushBars() {
+  const im = new T.InstancedMesh(new T.CylinderGeometry(0.012, 0.012, 1, 5), M.iron, barList.length), d = new T.Object3D();
+  barList.forEach((b, i) => { d.position.set(b[0], b[1], b[2]); d.scale.set(b[4], b[3], b[4]); d.updateMatrix(); im.setMatrixAt(i, d.matrix); });
+  scene.add(im);
+}
+// Tuyau/câble courbe entre des points (TubeGeometry suit une courbe lisse)
+function addTube(points, radius, material, segs = 16) {
+  const curve = new T.CatmullRomCurve3(points.map(p => new T.Vector3(...p)));
+  scene.add(new T.Mesh(new T.TubeGeometry(curve, segs, radius, 6, false), material));
 }
 
-function buildAlley() {
-  addBox(0, -0.5, 0, 20, 1, 44, M.ground, 3, false);        // sol
-  addBox(-6, 6, 0, 8, 12, 40, M.brick);                       // immeuble gauche (face intérieure : x = -2)
-  addBox(6, 6, 0, 8, 12, 40, M.brick);                        // immeuble droit  (face intérieure : x = +2)
-  addBox(0, 6, -21, 20, 12, 2, M.concrete);                   // mur du fond
-  addBox(0, 6, 21, 20, 12, 2, M.concrete);                    // mur du départ
+// --- Fenêtre : cadre, vitre, appui, linteau, parfois des volets (très parisien) ---
+function addWindow(side, y, z, kind) {
+  const wallX = 2 * side, inw = -side;                       // inw = direction vers l'intérieur de la ruelle
+  const gx = wallX + inw * 0.03;
+  const glassMat = kind === 'lit' ? M.litwin : kind === 'tv' ? M.tv : M.glass;
+  addBox(gx, y, z, 0.04, 1.3, 0.9, glassMat, 1, false);
+  addBox(gx + inw * 0.02, y + 0.7, z, 0.1, 0.08, 1.06, M.frame, 1, false);          // cadre haut/bas/côtés
+  addBox(gx + inw * 0.02, y - 0.7, z, 0.1, 0.08, 1.06, M.frame, 1, false);
+  addBox(gx + inw * 0.02, y, z - 0.5, 0.1, 1.46, 0.08, M.frame, 1, false);
+  addBox(gx + inw * 0.02, y, z + 0.5, 0.1, 1.46, 0.08, M.frame, 1, false);
+  addBox(gx + inw * 0.02, y, z, 0.07, 0.05, 0.9, M.frame, 1, false);                 // traverse
+  addBox(gx + inw * 0.09, y - 0.76, z, 0.22, 0.06, 1.2, M.concrete, 1, false);       // appui de fenêtre
+  addBox(gx + inw * 0.06, y + 0.78, z, 0.14, 0.08, 1.2, M.concrete, 1, false);       // linteau
+  if (kind === 'dark' && rnd() < 0.3) {                                              // volets entrouverts
+    for (const s of [-1, 1]) {
+      const grp = new T.Group(); grp.position.set(gx + inw * 0.05, y, z + s * 0.53);
+      const sh = new T.Mesh(new T.BoxGeometry(0.04, 1.4, 0.45), M.frame); sh.position.z = s * 0.225; grp.add(sh);
+      grp.rotation.y = -side * s * (0.9 + rnd() * 0.6); scene.add(grp);
+    }
+  }
+  if (rnd() < 0.5) {                                                                 // coulures sous la fenêtre
+    const dm = new T.Mesh(new T.PlaneGeometry(0.9, 1.6), dripMat);
+    dm.position.set(wallX + inw * 0.012, y - 1.5, z); dm.rotation.y = side === -1 ? Math.PI / 2 : -Math.PI / 2; scene.add(dm);
+  }
+}
+// --- Balcon en fer forgé ---
+function addBalcony(side, y, z, w = 1.6) {
+  const wallX = 2 * side, inw = -side, depth = 0.55, cx = wallX + inw * depth / 2, fx = wallX + inw * depth;
+  addBox(cx, y - 0.04, z, depth, 0.08, w, M.iron, 1, false);
+  addBox(fx, y + 0.95, z, 0.05, 0.05, w, M.iron, 1, false);
+  addBox(cx, y + 0.95, z - w / 2, depth, 0.05, 0.05, M.iron, 1, false);
+  addBox(cx, y + 0.95, z + w / 2, depth, 0.05, 0.05, M.iron, 1, false);
+  for (let i = 0; i <= 14; i++) addBar(fx, y + 0.5, z - w / 2 + i * w / 14, 0.9);
+  for (let t = 1; t < 5; t++) for (const e of [-1, 1]) addBar(wallX + inw * depth * t / 5, y + 0.5, z + e * w / 2, 0.9);
+}
+// --- Descente d'eau (tuyau rond avec colliers) ---
+function addDrain(side, z) {
+  const x = 2 * side - side * 0.1;
+  addMesh(new T.CylinderGeometry(0.07, 0.07, 12, 10), M.rust, x, 6, z);
+  addCollider(x, 6, z, 0.14, 12, 0.14);
+  for (let y = 1; y < 12; y += 2.5) addMesh(new T.CylinderGeometry(0.1, 0.1, 0.05, 10), M.iron, x, y, z);
+}
+// --- Escalier de secours (côté droit) : on peut y monter depuis la benne en sautant ---
+function addFireEscape() {
+  const PX = 1.35, PW = 1.3;
+  const platform = (z0, z1, y) => {                                   // plateforme + garde-corps côté ruelle
+    const len = Math.abs(z1 - z0), zc = (z0 + z1) / 2;
+    addBox(PX, y - 0.03, zc, PW, 0.06, len, M.rust, 1.5);
+    addBox(PX - PW / 2 + 0.02, y + 0.95, zc, 0.05, 0.05, len, M.iron, 1, false);
+    for (let i = 0; i <= Math.round(len / 0.12); i++) addBar(PX - PW / 2 + 0.02, y + 0.5, z0 + (z1 - z0) * i / Math.round(len / 0.12), 0.9);
+  };
+  platform(-9.1, -7.5, 2.4);
+  platform(-13.7, -12.1, 4.8);
+  const run = 0.3, rise = 0.24, n = 10, sx = 1.6;
+  for (let i = 0; i < n; i++) addBox(sx, 2.4 + rise * (i + 1) - 0.025, -9.1 - run * (i + 0.5), 0.7, 0.05, run, M.rust, 1);
+  const L = Math.hypot(run * n, rise * n), ang = Math.atan2(rise * n, run * n);
+  for (const x of [1.25, 1.95]) {
+    const st = addMesh(new T.BoxGeometry(0.05, 0.14, L), M.iron, x, 3.6, -10.6); st.rotation.x = ang;
+  }
+  addBox(1.35, 2.2, -7.3, 1.3, 0.04, 0.04, M.iron, 1, false);        // détail : traverse sous la plateforme
+}
+// --- Benne à ordures ---
+function addDumpster(x, z) {
+  addBox(x, 0.5, z, 1.0, 0.9, 1.8, M.dumpster, 1.5, false);
+  addCollider(x, 0.5, z, 1.0, 1.0, 1.8);
+  const lid = addMesh(new T.BoxGeometry(1.06, 0.05, 0.95), M.dumpster, x, 1.1, z - 0.45); lid.rotation.x = 0.35;   // couvercle entrouvert
+  addBox(x, 0.97, z + 0.4, 1.06, 0.06, 0.9, M.dumpster, 1.5, false);
+  for (const sx of [-0.4, 0.4]) for (const sz of [-0.7, 0.7]) addMesh(new T.CylinderGeometry(0.09, 0.09, 0.06, 10), M.iron, x + sx, 0.1, z + sz).rotation.z = Math.PI / 2;
+  for (let i = 0; i < 5; i++) addBag(x + (rnd() - 0.5) * 0.6, 1.05 + rnd() * 0.1, z + 0.4 + (rnd() - 0.5) * 0.7, 0.2 + rnd() * 0.1);   // déborde
+}
+// --- Sac poubelle : sphère aplatie et déformée ---
+function addBag(x, y, z, r) {
+  const g = new T.SphereGeometry(r, 9, 7), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const k = 1 + (rnd() - 0.5) * 0.28; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.8, p.getZ(i) * k); }
+  g.computeVertexNormals();
+  const m = addMesh(g, M.bag, x, y, z); m.rotation.y = rnd() * 6.28; return m;
+}
+// --- Baril métallique : cylindre + cerclages ---
+function addBarrel(x, z) {
+  addMesh(new T.CylinderGeometry(0.3, 0.3, 0.9, 14), M.rust, x, 0.45, z);
+  for (const y of [0.08, 0.45, 0.82]) addMesh(new T.CylinderGeometry(0.315, 0.315, 0.04, 14), M.iron, x, y, z);
+  addCollider(x, 0.45, z, 0.6, 0.9, 0.6);
+}
+function addTire(x, y, z) {
+  const t = addMesh(new T.TorusGeometry(0.28, 0.11, 8, 16), M.bag, x, y, z); t.rotation.x = Math.PI / 2; return t;
+}
+function addCrate(x, y, z, s) { addBox(x, y, z, s, s, s, M.wood, 0.8); }
+function addCardboard(x, z, w, h, d, ry) {
+  const m = addBox(x, h / 2, z, w, h, d, M.card, 0.6, false); m.rotation.y = ry;
+  addCollider(x, h / 2, z, Math.max(w, d) * 0.9, h, Math.max(w, d) * 0.9);
+}
+// --- Flaques (reflètent les néons) ---
+function addPuddle(x, z, r) { const m = addMesh(new T.CircleGeometry(r, 18), M.puddle, x, 0.006, z); m.rotation.x = -Math.PI / 2; m.scale.y = 0.7 + rnd() * 0.5; m.rotation.z = rnd() * 3; }
 
-  // Fenêtres, portes, tuyaux sur les façades
+const dripMat = new T.MeshBasicMaterial({ map: dripTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+let steam = null;   // fumée de bouche d'égout (animée plus bas)
+
+function buildAlley() {
+  // --- Gros volumes ---
+  addBox(0, -0.5, 0, 20, 1, 44, M.ground, 1.6, false);                // sol pavé
+  addBox(-6, 6, 0, 8, 12, 40, M.brick, 2);                            // immeuble gauche : briques
+  addBox(6, 6, 0, 8, 12, 40, M.plaster, 2);                           // immeuble droit : crépi qui s'écaille
+  addBox(0, 6, -21, 20, 12, 2, M.concrete, 3);                        // mur du fond
+  addBox(0, 6, 21, 20, 12, 2, M.concrete, 3);                         // mur du départ
+  for (const side of [-1, 1]) addBox(2 * side - side * 0.15, 11.8, 0, 0.3, 0.35, 40, M.concrete, 2, false);   // corniche
+
+  // --- Façades : fenêtres, balcons, portes, descentes d'eau ---
   for (const side of [-1, 1]) {
-    const wallX = 2 * side, outX = wallX - 0.04 * side;
     for (let z = -17; z <= 17; z += 4.5) {
       for (const y of [3.5, 7, 10]) {
+        if (side === 1 && z > -14 && z < -6.5 && y < 5.5) continue;   // place de l'escalier de secours
         const r = rnd();
-        if (r < 0.70) addBox(outX, y, z, 0.08, 1.4, 1.0, M.dark, 1, false);
-        else if (r < 0.80) addBox(outX, y, z, 0.08, 1.4, 1.0, M.litwin, 1, false);   // fenêtre éclairée, sale
-        else if (r < 0.85) addBox(outX, y, z, 0.08, 1.4, 1.0, M.tv, 1, false);       // lueur de télé
+        if (r < 0.70) addWindow(side, y, z, 'dark'); else if (r < 0.80) addWindow(side, y, z, 'lit'); else if (r < 0.85) addWindow(side, y, z, 'tv');
+        if (y === 7 && r < 0.5) addBalcony(side, y - 0.45, z);
       }
-      if (rnd() < 0.3) addBox(outX, 1.1, z + 1.8, 0.1, 2.2, 1.1, M.metal, 2, false); // porte
+      if (rnd() < 0.3 && !(side === 1 && z + 1.8 > -14 && z + 1.8 < -6.5)) {   // porte métallique
+        const inw = -side;
+        addBox(2 * side + inw * 0.06, 1.1, z + 1.8, 0.12, 2.2, 1.1, M.rust, 1.5, false);
+        addBox(2 * side + inw * 0.12, 1.1, z + 1.8, 0.04, 2.3, 1.2, M.frame, 1, false);
+      }
     }
-    for (const pz of [-14, -3, 7, 15]) addBox(wallX - 0.15 * side, 6, pz, 0.25, 12, 0.25, M.metal, 2); // tuyaux
+    for (const pz of [-14, -3, 7, 15]) addDrain(side, pz);
   }
-  addBox(0, 5.0, -4, 4, 0.25, 0.3, M.metal, 2);               // poutres en travers, en hauteur
-  addBox(0, 6.5, 8, 4, 0.25, 0.3, M.metal, 2);
+  // Tuyaux horizontaux sur la façade gauche + deux climatiseurs
+  addMesh(new T.CylinderGeometry(0.05, 0.05, 30, 8), M.rust, -1.88, 2.1, -2).rotation.x = Math.PI / 2;
+  addMesh(new T.CylinderGeometry(0.04, 0.04, 14, 8), M.iron, -1.9, 4.6, 8).rotation.x = Math.PI / 2;
+  for (const [side, z, y] of [[-1, 6, 5.4], [1, -1, 8.6]]) {
+    const inw = -side;
+    addBox(2 * side + inw * 0.25, y, z, 0.5, 0.5, 0.7, M.concrete, 1, false);
+    const fan = addMesh(new T.CylinderGeometry(0.2, 0.2, 0.03, 12), M.iron, 2 * side + inw * 0.52, y, z); fan.rotation.z = Math.PI / 2;
+  }
+  addFireEscape();
 
-  // Objets au sol
-  addBox(1.5, 0.6, -6, 1.0, 1.2, 1.8, M.metal, 2);            // benne
-  addBox(-1.4, 0.4, -2, 1.2, 0.8, 1.2, M.concrete, 2);        // caisses
-  addBox(-1.5, 1.2, -2.1, 0.9, 0.8, 0.9, M.concrete, 2);
+  // Gros conduit rouillé en travers + câbles qui pendent entre les immeubles
+  addMesh(new T.CylinderGeometry(0.22, 0.22, 4, 12), M.rust, 0, 5.0, -4).rotation.z = Math.PI / 2;
+  addMesh(new T.CylinderGeometry(0.16, 0.16, 4, 10), M.rust, 0, 6.6, 8).rotation.z = Math.PI / 2;
+  for (const [z, y, dz] of [[-16, 8.5, 0.5], [-9, 9.2, -0.3], [2, 7.5, 0.4], [12, 9.5, -0.5], [16, 6.8, 0.2]]) {
+    addTube([[-2, y, z], [-1, y - 0.35, z + dz * 0.5], [0, y - 0.6, z + dz], [1, y - 0.35, z + dz * 1.5], [2, y + 0.05, z + dz * 2]], 0.018, M.iron);
+    addTube([[-2, y - 0.2, z + 0.1], [0, y - 0.9, z + dz], [2, y - 0.1, z + dz * 2]], 0.012, M.iron);
+  }
+
+  // --- Objets au sol ---
+  addDumpster(1.5, -6);
+  addCrate(-1.4, 0.4, -2, 0.8); addCrate(-1.5, 1.2, -2.1, 0.8);       // caisses empilées
+  addCrate(-1.3, 0.3, -1.2, 0.6);
   addBarrel(-1.5, 9); addBarrel(-0.9, 9.8);
-  addBox(1.0, 0.6, -12, 2.0, 1.2, 0.6, M.concrete, 2);        // muret à sauter
-  addBox(-1.6, 0.2, -15, 0.6, 0.4, 0.5, M.trash, 1);          // sacs-poubelle
-  addBox(-1.2, 0.15, -15.6, 0.5, 0.3, 0.4, M.trash, 1);
-  addBox(1.6, 0.2, 4, 0.6, 0.4, 0.5, M.trash, 1);
+  addTire(1.5, 0.11, 10); addTire(1.5, 0.33, 10);
+  addCollider(1.5, 0.22, 10, 0.8, 0.44, 0.8);
+  addBox(1.0, 0.6, -12, 2.0, 1.2, 0.6, M.concrete, 2);                // muret à sauter
+  addBox(1.0, 1.23, -12, 2.04, 0.06, 0.66, M.concrete, 2, false);     // dessus du muret
+  addCardboard(-1.5, 5, 0.8, 0.5, 0.6, 0.4); addCardboard(-1.3, 4.4, 0.5, 0.4, 0.5, -0.5);
+  for (const [x, z, r] of [[-1.6, -15, 0.3], [-1.2, -15.6, 0.26], [-1.7, -14.4, 0.24], [1.6, 4, 0.3], [1.3, 3.5, 0.24], [-1.5, 15, 0.3], [-1.2, 15.4, 0.28]]) {
+    addBag(x, r * 0.7, z, r); addCollider(x, r * 0.6, z, r * 1.5, r * 1.2, r * 1.5);
+  }
+  for (const [x, z, r] of [[0.3, 13, 0.8], [-0.5, 6, 0.6], [0.6, -1, 0.9], [-0.2, -8.5, 0.5], [0.4, -17, 0.9], [0, 17.5, 0.7]]) addPuddle(x, z, r);
+  for (let i = 0; i < 30; i++) {                                                                        // papiers, déchets au sol
+    const m = addMesh(new T.PlaneGeometry(0.12 + rnd() * 0.15, 0.1 + rnd() * 0.15), M.paper, (rnd() - 0.5) * 3.6, 0.01, -18 + rnd() * 36);
+    m.rotation.x = -Math.PI / 2; m.rotation.z = rnd() * 6.28;
+  }
+  // Bouche d'égout + fumée
+  const mh = addMesh(new T.CylinderGeometry(0.42, 0.42, 0.03, 16), M.iron, -0.2, 0.015, -4.8);
+  addMesh(new T.TorusGeometry(0.42, 0.03, 6, 16), M.rust, -0.2, 0.03, -4.8).rotation.x = Math.PI / 2;
+  steam = { x: -0.2, z: -4.8, puffs: [] };
+  for (let i = 0; i < 8; i++) {
+    const sp = new T.Sprite(new T.SpriteMaterial({ map: smokeTex, transparent: true, depthWrite: false, opacity: 0 }));
+    sp.userData.age = i * 0.9; scene.add(sp); steam.puffs.push(sp);
+  }
+
+  // --- Affiches et graffitis (propagande du régime, avis de recherche, tags) ---
+  const posters = [['prop', -1, 14.5, 1.9, 1.0, 1.4], ['wanted', 1, 10, 1.7, 1.0, 1.4], ['tag', -1, 3, 1.6, 1.4, 1.4], ['prop2', 1, 6, 1.9, 1.0, 1.4],
+    ['wanted', -1, -4.5, 1.6, 1.0, 1.4], ['tag', 1, -9, 0.7, 1.3, 1.3], ['prop', 1, -16, 1.8, 1.0, 1.4], ['prop2', -1, -15, 1.9, 1.0, 1.4]];
+  for (const [kind, side, z, y, w, h] of posters) addDecal(side, z, y, w * (kind === 'tag' ? 1.4 : 1), kind === 'tag' ? w * 1.4 : w * 1.37, decalMaterial(posterTexture(kind)));
+
+  // --- Grille fermée au fond : la sortie est condamnée ---
+  addCollider(0, 1.5, -19.55, 4, 3, 0.1);                                 // la grille bloque le passage
+  for (let i = 0; i <= 28; i++) addBar(-1.95 + i * 0.139, 1.5, -19.5, 3.0, 1.6);
+  addBox(0, 2.9, -19.5, 4, 0.06, 0.06, M.iron, 1, false); addBox(0, 0.1, -19.5, 4, 0.06, 0.06, M.iron, 1, false); addBox(0, 1.5, -19.5, 4, 0.06, 0.06, M.iron, 1, false);
+  addBox(0.2, 1.25, -19.45, 0.1, 0.14, 0.06, M.rust, 1, false);           // cadenas
+  flushBars();
 }
 
 /* =====================================================================
@@ -225,7 +530,11 @@ function addNeon(o) {
   const light = new T.PointLight(o.color, o.I, 11, 2);
   light.position.set(...o.light);
   scene.add(light);
-  const n = { ...o, mesh, material, light, level: 1, cur: 1, burst: 0, blink: 0, dead: false, phase: Math.random() * 10, base: new T.Color(o.color) };
+  // Halo lumineux autour de l'enseigne (diffusion dans le brouillard)
+  const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: o.color, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.5 }));
+  glow.position.set(o.pos[0] + (o.light[0] - o.pos[0]) * 0.3, o.pos[1], o.pos[2] + (o.light[2] - o.pos[2]) * 0.3);
+  const gs = Math.max(o.size[0], o.size[1]) * 2.2; glow.scale.set(gs, gs, 1); scene.add(glow);
+  const n = { ...o, mesh, material, light, glow, level: 1, cur: 1, burst: 0, blink: 0, dead: false, phase: Math.random() * 10, base: new T.Color(o.color) };
   neons.push(n);
   return n;
 }
@@ -256,46 +565,120 @@ function updateNeons(dt, time) {
     if (n.text) n.material.color.setScalar(0.08 + 0.92 * n.level);
     else n.material.color.copy(n.base).multiplyScalar(0.06 + 0.94 * n.level);
     n.light.intensity = n.I * n.level;
+    n.glow.material.opacity = 0.55 * n.level;
   }
 }
 
 /* =====================================================================
-   5. LE CORPS (et ce qu'il tient)
-   Retenue : un homme au sol, une flaque, un détail qui raconte. Pas de spectacle.
+   5. LE CORPS (et ce qu'il tient) + LA SILHOUETTE
+   Fait de membres arrondis (cylindres effilés) et d'articulations (sphères déformées).
+   Retenue : un homme au sol, une flaque, une traînée sur le mur, un détail qui raconte.
    ===================================================================== */
 const BODY = new T.Vector3(-1.0, 0, -10.5);
 let silhouette = null;
+
+// Un membre = cylindre effilé entre deux points (r0 au départ, r1 à l'arrivée)
+function limb(group, material, p0, p1, r0, r1, seg = 10) {
+  const a = new T.Vector3(...p0), b = new T.Vector3(...p1), len = a.distanceTo(b);
+  const m = new T.Mesh(new T.CylinderGeometry(r1, r0, len, seg), material);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+  group.add(m); return m;
+}
+// Une articulation / masse = sphère étirée
+function ball(group, material, p, r, sx = 1, sy = 1, sz = 1, seg = 12) {
+  const m = new T.Mesh(new T.SphereGeometry(r, seg, seg - 2), material);
+  m.position.set(...p); m.scale.set(sx, sy, sz); group.add(m); return m;
+}
+
 function buildBody() {
-  const g = new T.Group(); g.position.copy(BODY); g.rotation.y = 0.1;
-  const dk = (c) => new T.MeshPhongMaterial({ color: c, shininess: 0 });
-  const part = (w, h, d, x, y, z, color, ry = 0) => {
-    const m = new T.Mesh(new T.BoxGeometry(w, h, d), dk(color));
-    m.position.set(x, y, z); m.rotation.y = ry; g.add(m); return m;
-  };
-  // Flaque de sang : disque plat à peine au-dessus du sol, brillant comme du liquide
-  const pool = new T.Mesh(new T.CircleGeometry(0.85, 9),
-    new T.MeshPhongMaterial({ color: 0x2b0707, shininess: 40, specular: 0x552222 }));
-  pool.rotation.x = -Math.PI / 2; pool.position.set(0.05, 0.012, -0.1); pool.scale.set(1.25, 1, 1); g.add(pool);
-  const smear = new T.Mesh(new T.PlaneGeometry(0.28, 1.3), pool.material);   // traînée vers le mur : il a rampé
-  smear.rotation.x = -Math.PI / 2; smear.rotation.z = 0.25; smear.position.set(-0.5, 0.014, -0.6); g.add(smear);
-  part(0.52, 0.24, 0.68, 0, 0.13, 0, 0x1b1d22);                 // torse (veste)
-  part(0.24, 0.22, 0.24, 0.03, 0.12, -0.55, 0x6a5d57);          // tête
-  part(0.2, 0.19, 0.78, -0.14, 0.1, 0.88, 0x15161a, 0.1);       // jambes
-  part(0.2, 0.19, 0.78, 0.16, 0.1, 0.83, 0x15161a, -0.35);
-  part(0.22, 0.13, 0.32, -0.19, 0.07, 1.34, 0x0b0b0d, 0.1);     // chaussures
-  part(0.22, 0.13, 0.32, 0.33, 0.07, 1.25, 0x0b0b0d, -0.35);
-  part(0.15, 0.13, 0.62, 0.5, 0.08, -0.35, 0x1b1d22, 0.55);     // bras tendu vers la ruelle
-  part(0.15, 0.13, 0.5, -0.36, 0.08, 0.1, 0x1b1d22, -0.2);      // bras replié
-  // Une vieille clé USB, tombée près de la main tendue. Rien d'autre.
-  const usb = part(0.05, 0.02, 0.14, 0.9, 0.025, -0.65, 0x8c98a4, 0.4);
-  usb.material = new T.MeshBasicMaterial({ color: 0x6f7b88 });
+  const g = new T.Group(); g.position.copy(BODY); g.rotation.y = 0.12;
+  const jacket = M.cloth, pants = new T.MeshPhongMaterial({ color: 0x15171b, shininess: 4 });
+  const skin = new T.MeshPhongMaterial({ color: 0x84766d, shininess: 10, specular: 0x222222 });
+  const dark = new T.MeshPhongMaterial({ color: 0x0c0c0e, shininess: 3 });
+  const boot = new T.MeshPhongMaterial({ color: 0x0b0b0d, shininess: 35, specular: 0x333333 });
+  const blood = new T.MeshPhongMaterial({ color: 0x300606, shininess: 90, specular: 0x772222, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+
+  // --- Flaque de sang : contour irrégulier (forme dessinée avec des points) ---
+  const shape = new T.Shape();
+  for (let i = 0; i <= 28; i++) {
+    const a = i / 28 * 6.2832, r = 0.55 + 0.25 * Math.sin(a * 3 + 1) + 0.12 * Math.sin(a * 5) + (hash2(i, 4) - 0.5) * 0.1;
+    const x = Math.cos(a) * r * 1.2, y = Math.sin(a) * r;
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  const pool = new T.Mesh(new T.ShapeGeometry(shape), blood);
+  pool.rotation.x = -Math.PI / 2; pool.position.set(-0.1, 0.014, -0.05); g.add(pool);
+  const smear = new T.Mesh(new T.PlaneGeometry(0.3, 1.2), blood);                 // traînée : il a rampé jusqu'ici
+  smear.rotation.x = -Math.PI / 2; smear.rotation.z = -0.12; smear.position.set(-0.5, 0.016, -1.0); g.add(smear);
+  for (const [x, z, r] of [[0.7, -0.45, 0.05], [0.95, -0.7, 0.035], [0.55, -0.9, 0.03], [-0.7, 0.6, 0.04]]) {   // gouttes
+    const d = new T.Mesh(new T.CircleGeometry(r, 8), blood); d.rotation.x = -Math.PI / 2; d.position.set(x, 0.017, z); g.add(d);
+  }
+
+  // --- Tronc (allongé sur le dos) ---
+  ball(g, jacket, [0, 0.14, -0.14], 0.27, 1.0, 0.5, 0.95);          // poitrine
+  ball(g, jacket, [0, 0.12, 0.2], 0.23, 1.0, 0.5, 1.0);             // ventre
+  ball(g, pants, [0, 0.11, 0.42], 0.17, 1.15, 0.7, 0.8);            // bassin
+  ball(g, jacket, [0.3, 0.13, -0.3], 0.1);                          // épaules
+  ball(g, jacket, [-0.3, 0.13, -0.3], 0.1);
+  // Deux déchirures sur la veste, bordées de sombre (retenue : on devine, on ne détaille pas)
+  const wound = new T.Mesh(new T.PlaneGeometry(0.2, 0.12), blood); wound.rotation.x = -Math.PI / 2; wound.position.set(0.05, 0.215, 0.05); g.add(wound);
+
+  // --- Tête : sphère, capuche, visage pâle, yeux fermés, bouche entrouverte ---
+  const head = new T.Group(); head.position.set(0.05, 0.13, -0.64); head.rotation.z = 0.35; head.rotation.y = 0.2; g.add(head);
+  limb(g, skin, [0, 0.12, -0.42], [0.04, 0.13, -0.55], 0.06, 0.055);                           // cou
+  ball(head, skin, [0, 0, 0], 0.115, 0.92, 1.0, 1.1);                                          // crâne
+  ball(head, dark, [0, -0.025, -0.022], 0.12, 0.98, 1.0, 1.08);                                 // capuche / cheveux (derrière)
+  ball(head, skin, [0, 0.0, 0.1], 0.04, 0.9, 0.8, 0.9, 8);                                      // menton
+  ball(head, skin, [0, 0.098, -0.02], 0.022, 0.8, 1.0, 1.2, 8);                                 // nez
+  for (const s of [-1, 1]) {
+    ball(head, dark, [s * 0.045, 0.1, -0.05], 0.022, 1.3, 0.35, 0.8, 8);                        // paupières closes
+    ball(head, skin, [s * 0.06, 0.07, 0.02], 0.03, 1, 0.8, 1, 8);                               // pommettes
+  }
+  ball(head, dark, [0, 0.085, 0.075], 0.022, 1.5, 0.3, 0.7, 8);                                  // bouche entrouverte
+
+  // --- Bras tendu vers la ruelle (main ouverte) et bras replié sur le ventre ---
+  limb(g, jacket, [0.3, 0.13, -0.3], [0.56, 0.1, -0.4], 0.085, 0.07);
+  limb(g, jacket, [0.56, 0.1, -0.4], [0.86, 0.06, -0.62], 0.07, 0.055);
+  ball(g, skin, [0.9, 0.045, -0.65], 0.05, 1.1, 0.5, 1.3, 8);                                    // paume
+  for (let f = 0; f < 4; f++) limb(g, skin, [0.92 + f * 0.012, 0.04, -0.68 - f * 0.018], [1.0 + f * 0.015, 0.025, -0.74 - f * 0.05], 0.011, 0.008, 5);   // doigts
+  limb(g, skin, [0.89, 0.04, -0.63], [0.97, 0.03, -0.56], 0.012, 0.009, 5);                      // pouce
+  limb(g, jacket, [-0.3, 0.13, -0.3], [-0.52, 0.1, -0.08], 0.085, 0.07);
+  limb(g, jacket, [-0.52, 0.1, -0.08], [-0.24, 0.17, 0.08], 0.07, 0.055);
+  ball(g, skin, [-0.21, 0.18, 0.1], 0.045, 1, 0.55, 1.2, 8);
+
+  // --- Jambes : une jambe pliée, une tendue ; chaussures ---
+  limb(g, pants, [0.12, 0.11, 0.45], [0.32, 0.3, 0.88], 0.11, 0.085);
+  limb(g, pants, [0.32, 0.3, 0.88], [0.22, 0.08, 1.22], 0.085, 0.06);
+  ball(g, boot, [0.22, 0.07, 1.3], 0.085, 0.95, 0.75, 1.7);
+  limb(g, pants, [-0.12, 0.11, 0.47], [-0.2, 0.1, 0.95], 0.11, 0.085);
+  limb(g, pants, [-0.2, 0.1, 0.95], [-0.3, 0.07, 1.42], 0.085, 0.06);
+  ball(g, boot, [-0.32, 0.07, 1.5], 0.085, 0.95, 0.75, 1.7);
+
+  // --- Une vieille clé USB, tombée près de la main tendue ---
+  const usb = new T.Mesh(new T.BoxGeometry(0.05, 0.02, 0.15), new T.MeshPhongMaterial({ color: 0x8c98a4, shininess: 90, specular: 0xffffff }));
+  usb.position.set(1.12, 0.012, -0.78); usb.rotation.y = 0.5; g.add(usb);
+  const usbTip = new T.Mesh(new T.BoxGeometry(0.03, 0.012, 0.04), new T.MeshBasicMaterial({ color: 0xc9d4de }));
+  usbTip.position.set(1.095, 0.014, -0.855); usbTip.rotation.y = 0.5; g.add(usbTip);
   scene.add(g);
 
-  // La silhouette qui n'est pas censée être là (visible seulement après la scène de peur)
+  // --- Traînée de sang sur le mur : il a glissé le long de la façade (decal) ---
+  const sc = document.createElement('canvas'); sc.width = 64; sc.height = 128; const sg = sc.getContext('2d');
+  for (let i = 0; i < 7; i++) { const x = 14 + i * 6 + rnd() * 3, len = 40 + rnd() * 80; const gr = sg.createLinearGradient(0, 0, 0, 128);
+    gr.addColorStop(0, 'rgba(60,6,6,0.0)'); gr.addColorStop(0.25, 'rgba(60,6,6,0.75)'); gr.addColorStop(1, 'rgba(40,4,4,0.9)'); sg.fillStyle = gr; sg.fillRect(x, 128 - len, 3 + rnd() * 3, len); }
+  sg.fillStyle = 'rgba(50,5,5,0.8)'; sg.beginPath(); sg.ellipse(30, 40, 14, 10, 0.4, 0, 6.28); sg.fill();           // trace de main
+  const st = new T.CanvasTexture(sc); st.magFilter = T.NearestFilter; st.minFilter = T.NearestFilter;
+  const wallSmear = addDecal(-1, -10.2, 0.75, 0.9, 1.5, decalMaterial(st)); wallSmear.name = 'smear';
+
+  // --- La silhouette qui n'est pas censée être là : humanoïde noir, bras trop longs ---
   silhouette = new T.Group();
   const sm = new T.MeshBasicMaterial({ color: 0x000000 });
-  const sp = (w, h, d, x, y, z) => { const m = new T.Mesh(new T.BoxGeometry(w, h, d), sm); m.position.set(x, y, z); silhouette.add(m); };
-  sp(0.5, 0.8, 0.28, 0, 1.25, 0); sp(0.22, 0.24, 0.22, 0, 1.82, 0); sp(0.2, 0.85, 0.22, -0.13, 0.42, 0); sp(0.2, 0.85, 0.22, 0.13, 0.42, 0);
+  limb(silhouette, sm, [0, 1.0, 0], [0, 1.55, 0], 0.17, 0.2, 8);                  // tronc
+  ball(silhouette, sm, [0, 1.75, 0], 0.12, 0.9, 1.1, 1, 10);                      // tête
+  ball(silhouette, sm, [0, 1.73, -0.02], 0.15, 1, 1.1, 1, 10);                    // capuche
+  limb(silhouette, sm, [-0.1, 1.0, 0], [-0.12, 0.0, 0], 0.09, 0.06, 8);           // jambes
+  limb(silhouette, sm, [0.1, 1.0, 0], [0.12, 0.0, 0], 0.09, 0.06, 8);
+  limb(silhouette, sm, [-0.22, 1.5, 0], [-0.3, 0.55, 0.05], 0.06, 0.04, 6);       // bras pendants, anormalement longs
+  limb(silhouette, sm, [0.22, 1.5, 0], [0.3, 0.55, 0.05], 0.06, 0.04, 6);
   silhouette.position.set(0.3, 0, -17.2);
   silhouette.visible = false;
   scene.add(silhouette);
@@ -328,7 +711,7 @@ function initAudio() {
   reverb = ac.createConvolver(); reverb.buffer = ir;
   const rg = ac.createGain(); rg.gain.value = 0.55; reverb.connect(rg); rg.connect(master);
 
-  startWind(); startDrone(); startBreath(); startNeonHums();
+  startWind(); startDrone(); startBreath(); startNeonHums(); startRain();
   scheduleMusic(); scheduleSiren(14000);
 }
 function noiseSource(loop) { const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = loop; return s; }
@@ -371,6 +754,25 @@ function startNeonHums() {
     o.connect(f); f.connect(g); g.connect(p); p.connect(ambBus); o.start();
     hums.push({ n, g });
   }
+}
+// Pluie : bruit aigu continu + gouttes qui tombent de temps en temps (sons courts, dans l'écho)
+function startRain() {
+  const s = noiseSource(true); s.start();
+  const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1500;
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7500;
+  const g = ac.createGain(); g.gain.value = 0.05;
+  s.connect(hp); hp.connect(lp); lp.connect(g); g.connect(ambBus);
+  scheduleDrip();
+}
+function scheduleDrip() {
+  if (ac) {
+    const t = ac.currentTime, o = ac.createOscillator(), f = 1100 + Math.random() * 1400;
+    o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + 0.06);
+    const g = ac.createGain(); g.gain.setValueAtTime(0.04, t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.08);
+    const pan = ac.createStereoPanner(); pan.pan.value = Math.random() * 2 - 1;
+    o.connect(g); g.connect(pan); pan.connect(ambBus); pan.connect(reverb); o.start(t); o.stop(t + 0.1);
+  }
+  setTimeout(scheduleDrip, 400 + Math.random() * 2600);
 }
 // Musique générative : notes lentes, graves, dans une gamme mineure, noyées dans l'écho
 const SCALE = [110, 130.8, 146.8, 164.8, 196, 220, 261.6];
@@ -555,9 +957,38 @@ startEl.addEventListener('click', () => {
 });
 
 buildAlley(); buildNeons(); buildBody();
-const playerLight = new T.PointLight(0x5a6a8a, 0.5, 8, 2);   // une lueur très faible autour du joueur
+const playerLight = new T.PointLight(0x6a7a9a, 0.8, 9, 2);   // une lueur très faible autour du joueur
 scene.add(playerLight);
-scene.add(new T.AmbientLight(0x2a3346, 0.6));
+scene.add(new T.HemisphereLight(0x33405c, 0x120d0d, 0.75));   // ciel bleuté en haut, sol sombre en bas
+
+// --- Pluie : 900 traits qui tombent autour du joueur ---
+const RAIN_N = 900, rainX = new Float32Array(RAIN_N), rainY = new Float32Array(RAIN_N), rainZ = new Float32Array(RAIN_N), rainPos = new Float32Array(RAIN_N * 6);
+for (let i = 0; i < RAIN_N; i++) { rainX[i] = (Math.random() * 2 - 1) * 1.95; rainY[i] = Math.random() * 9; rainZ[i] = 17 + (Math.random() * 2 - 1) * 12; }
+const rainGeo = new T.BufferGeometry(); rainGeo.setAttribute('position', new T.BufferAttribute(rainPos, 3));
+const rain = new T.LineSegments(rainGeo, new T.LineBasicMaterial({ color: 0x9fb2c8, transparent: true, opacity: 0.28 }));
+rain.frustumCulled = false; scene.add(rain);
+function updateRain(dt) {
+  const cz = P.pos.z;
+  for (let i = 0; i < RAIN_N; i++) {
+    rainY[i] -= 17 * dt;
+    if (rainY[i] < 0) { rainY[i] = 8 + Math.random() * 1.5; rainX[i] = (Math.random() * 2 - 1) * 1.95; rainZ[i] = cz + (Math.random() * 2 - 1) * 12; }
+    else if (Math.abs(rainZ[i] - cz) > 13) rainZ[i] = cz + (Math.random() * 2 - 1) * 12;       // on suit le joueur
+    const k = i * 6;
+    rainPos[k] = rainX[i]; rainPos[k + 1] = rainY[i]; rainPos[k + 2] = rainZ[i];
+    rainPos[k + 3] = rainX[i] - 0.02; rainPos[k + 4] = rainY[i] + 0.55; rainPos[k + 5] = rainZ[i];
+  }
+  rainGeo.attributes.position.needsUpdate = true;
+}
+// Fumée de la bouche d'égout : des nuages qui montent, grossissent, s'effacent
+function updateSteam(dt) {
+  if (!steam) return;
+  for (const sp of steam.puffs) {
+    sp.userData.age += dt; if (sp.userData.age > 7) sp.userData.age = 0;
+    const a = sp.userData.age, t = a / 7, w = sp.id;
+    sp.position.set(steam.x + Math.sin(a * 0.8 + w) * 0.4 * t, 0.1 + t * 3.2, steam.z + Math.cos(a * 0.6 + w) * 0.3 * t);
+    const s = 0.6 + t * 2.2; sp.scale.set(s, s, 1); sp.material.opacity = Math.sin(Math.PI * t) * 0.3;
+  }
+}
 
 let last = performance.now(), time = 0;
 const dir = new T.Vector3();
@@ -580,7 +1011,8 @@ function frame(now) {
     camera.position.set(P.pos.x, P.pos.y + 1.6 + bobY, P.pos.z);
     camera.rotation.set(P.pitch, P.yaw, 0);
   }
-  updateNeons(dt, time);
+  updateNeons(dt, time); updateRain(dt); updateSteam(dt);
+  if (Math.random() < 0.15) M.tv.color.setRGB(0.17, 0.29, 0.39).multiplyScalar(0.5 + Math.random() * 0.9);   // lueur de télé qui vacille
   playerLight.position.copy(camera.position);
   // Son 3D : l'oreille suit la caméra ; chaque néon bourdonne selon son niveau de lumière
   if (ac) {

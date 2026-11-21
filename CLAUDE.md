@@ -59,6 +59,10 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Textures 100 % procédurales (`scripts/textures.gd`), 64x64, filtrage nearest, projection triplanar monde (pas d'UV à gérer).
 - Ruelle : `scripts/alley.gd` (boîtes/cylindres), z=+20 départ -> z=-20 fond, 4 m de large. Zone libre côté gauche vers z=-10 réservée au corps.
 
+- **Passe « réalisme » (v2)** : le look « Roblox » (boîtes partout) remplacé par du détail : vraies formes (cylindres, tubes, sphères déformées), textures 128x128 avec cartes de relief (bump), pavés mouillés qui reflètent les néons, fenêtres avec cadres/volets/appuis, balcons en fer forgé (barres instanciées), escalier de secours praticable (saut depuis la benne), câbles, conduits, affiches de propagande/avis de recherche/graffitis, grille fermée au fond, flaques, fumée d'égout, pluie (lignes) + bruit de pluie et gouttes, halos de néon dans le brouillard, éclairage hémisphérique. Corps humain refait (membres effilés, visage, mains, flaque irrégulière, traînée sur le mur). Rendu interne 480p.
+- Réglages de perf si ça rame chez l'utilisateur : `INTERNAL_H` (480 -> 360), `RAIN_N` (900 -> 400), nombre de fenêtres/balcons.
+- Piège rencontré : bumpScale trop fort = pavés en « pointes » et crépi en « taches ». Rester entre 0.5 et 1.2.
+
 ## ÉTAPES
 (Version web : prototype complet livré d'un coup — ruelle, brouillard, néons qui grésillent, corps, son 3D, musique générative, scène de peur. À valider par l'utilisateur.)
 - [x] Étape 1 — Projet + joueur FPS dans une salle de test.
