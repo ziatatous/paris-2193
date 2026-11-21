@@ -63,6 +63,17 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Réglages de perf si ça rame chez l'utilisateur : `INTERNAL_H` (480 -> 360), `RAIN_N` (900 -> 400), nombre de fenêtres/balcons.
 - Piège rencontré : bumpScale trop fort = pavés en « pointes » et crépi en « taches ». Rester entre 0.5 et 1.2.
 
+## DIRECTION ARTISTIQUE v3 (retours utilisateur, en cours de brainstorm, rien de codé)
+Verdict sur la v2 : « trop lego, plastique, net ». Objectifs :
+- **Silent Hill + écran à tube cathodique** : flou, pixellisé, granuleux, brut. Voir MOINS de détails (le brouillard et le flou cachent les limites du navigateur). Gros brouillard seulement, **plus de pluie**.
+- **Brutaliste, gris, béton brut** (granit/béton banché, taches, aucune couleur vive), style Straftat, plus orienté **parkour**. Très peu de couleurs : néons réduits.
+- **Fluide** sur un vrai PC (priorité perf : peu de lumières dynamiques, éclairage « cuit » dans les sommets, pas de bump).
+- **Début dans un appartement**, puis sortie vers la rue (plus de départ dans la ruelle).
+- **Voir son propre corps** (mains, bras, jambes) : modulable plus tard (chrome, tatouages) => peau en texture peinte par couches, peu de textures mais bien faites.
+- **Menu au démarrage**, puis le jeu se charge ; **code séparé en plusieurs fichiers** pour la lisibilité (scripts classiques, pas de modules ES, pour pouvoir ouvrir en double-clic).
+- À retirer pour l'instant : affiches, pneus, pluie, **scène de peur** (jugée ratée). À garder : **tonneaux**. Ne pas supprimer le corps dans la ruelle sans en reparler.
+- Insight : le brutalisme EST fait de grosses boîtes ; le côté « lego » venait des couleurs, de la netteté et de la texture uniforme, pas des boîtes.
+
 ## ÉTAPES
 (Version web : prototype complet livré d'un coup — ruelle, brouillard, néons qui grésillent, corps, son 3D, musique générative, scène de peur. À valider par l'utilisateur.)
 - [x] Étape 1 — Projet + joueur FPS dans une salle de test.
