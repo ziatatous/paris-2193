@@ -124,6 +124,7 @@
       dark: new T.MeshPhongMaterial({ color: 0x08090a, shininess: 2 }),
       wood: new T.MeshPhongMaterial({ color: 0x4a3f30, shininess: 3 }),
       puddle: new T.MeshPhongMaterial({ color: 0x030405, shininess: 120, specular: 0x889099, transparent: true, opacity: 0.85, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
+      dumpster: new T.MeshPhongMaterial({ color: 0x2a3028, shininess: 2, specular: 0x000000 }),
       iron: new T.MeshPhongMaterial({ color: 0x15171a, shininess: 20, specular: 0x333333 }),
       cloth: new T.MeshPhongMaterial({ color: 0x4b524a, shininess: 2 }),
       cloth2: new T.MeshPhongMaterial({ color: 0x6d7168, shininess: 2 }),
