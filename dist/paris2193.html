@@ -185,7 +185,7 @@
 
   const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }`;
   const FRAG = `
-    uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform vec2 texel; uniform float time; uniform float flash;
+    uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform vec2 texel; uniform float time; uniform float flash; uniform float alert;
     uniform float near; uniform float far; uniform float tanHalf; uniform float aspect; uniform float aoK;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -220,6 +220,8 @@
       col = mix(vec3(l), col, 0.62) * vec3(0.93, 1.0, 0.95) + 0.028;
       col += (hash(gl_FragCoord.xy + fract(time) * 71.0) - 0.5) * 0.13;   // grain (marqué)
       col *= smoothstep(1.15, 0.3, length(c) * 1.3);             // bords sombres, doux
+      float edge = smoothstep(0.25, 0.95, length(c) * 1.4);                                   // alerte : les bords rougissent et battent comme un pouls
+      col.r += alert * edge * (0.16 + 0.07 * sin(time * 9.0)); col.gb *= 1.0 - alert * edge * 0.35;
       col += flash;
       gl_FragColor = vec4(col, 1.0);
     }`;
@@ -233,7 +235,7 @@
     G.postScene = new T.Scene();
     G.postCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     G.postMat = new T.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, texel: { value: new T.Vector2(1 / 576, 1 / 324) }, time: { value: 0 }, flash: { value: 0 },
+      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, texel: { value: new T.Vector2(1 / 576, 1 / 324) }, time: { value: 0 }, flash: { value: 0 }, alert: { value: 0 },
                   near: { value: 0.05 }, far: { value: 90 }, tanHalf: { value: 0.7 }, aspect: { value: 16 / 9 }, aoK: { value: 1 } },
       vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false
     });
@@ -258,7 +260,7 @@
 
   G.render = function (time) {
     const u = G.postMat.uniforms;
-    u.time.value = time; u.aspect.value = G.camera.aspect; u.tanHalf.value = Math.tan(G.camera.fov * Math.PI / 360);
+    u.time.value = time; u.alert.value = G.alert || 0; u.aspect.value = G.camera.aspect; u.tanHalf.value = Math.tan(G.camera.fov * Math.PI / 360);
     G.renderer.setRenderTarget(G.rt);
     G.renderer.render(G.scene, G.camera);
     G.renderer.setRenderTarget(null);
@@ -436,7 +438,7 @@
       }
     return c;
   }
-  G.addBoxCollider = (x0, x1, y0, y1, z0, z1) => insert({ t: 0, minX: x0, maxX: x1, minY: y0, maxY: y1, minZ: z0, maxZ: z1, q: 0 });
+  G.addBoxCollider = (x0, x1, y0, y1, z0, z1) => insert({ t: 0, minX: Math.min(x0, x1), maxX: Math.max(x0, x1), minY: Math.min(y0, y1), maxY: Math.max(y0, y1), minZ: Math.min(z0, z1), maxZ: Math.max(z0, z1), q: 0 });
   G.addSegCollider = (ax, az, bx, bz, y0, y1) => insert({ t: 1, ax, az, bx, bz, l2: (bx - ax) * (bx - ax) + (bz - az) * (bz - az) || 1e-6,
     minX: Math.min(ax, bx), maxX: Math.max(ax, bx), minZ: Math.min(az, bz), maxZ: Math.max(az, bz), minY: y0, maxY: y1, q: 0 });
   // Un rectangle tourné (voiture, caisse en biais) = 4 segments
@@ -570,6 +572,7 @@
   // B(x0,x1, y0,y1, z0,z1, matériau, options) : une boîte définie par ses limites. Collision par défaut.
   G.B = function (x0, x1, y0, y1, z0, z1, mat, o) {
     o = o || {};
+    if (x0 > x1) { const t = x0; x0 = x1; x1 = t; } if (y0 > y1) { const t = y0; y0 = y1; y1 = t; } if (z0 > z1) { const t = z0; z0 = z1; z1 = t; }   // limites dans le désordre : on les remet dans l'ordre
     const w = x1 - x0, h = y1 - y0, d = z1 - z0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
     let mesh = null;
     if (!o.nomesh) {
@@ -742,6 +745,7 @@
   function ball(group, mat, p, r, sx, sy, sz, seg) {
     const m = new T.Mesh(new T.SphereGeometry(r, seg || 12, (seg || 12) - 2), mat); m.position.set(...p); m.scale.set(sx || 1, sy || 1, sz || 1); group.add(m); return m;
   }
+  G.limb = limb; G.ball = ball;
   G.buildBody = function (px, pz, ry) {
     const g = new T.Group(); g.position.set(px, 0, pz); g.rotation.y = ry || 0;
     const ph = c => new T.MeshPhongMaterial({ color: c, shininess: 6 });
@@ -775,7 +779,7 @@
     glowTex = G.glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']]);
     G.scene.background = new T.Color(0x161b1e);
     G.scene.fog = new T.FogExp2(0x161b1e, 0.09);
-    G.scene.add(new T.HemisphereLight(0x55626b, 0x1d2224, 0.95));         // ciel gris-bleu en haut, sol sombre en bas
+    G.scene.add(new T.HemisphereLight(0x5d6a73, 0x252a2c, 1.35));         // ciel gris-bleu en haut, sol sombre en bas
     G.pool = [0, 1, 2].map(() => { const l = new T.PointLight(0xffffff, 0, 10, 2); G.scene.add(l); return l; });
     buildTower(); G.buildCity();
   };
@@ -799,40 +803,45 @@
 
   // Le schéma d'origine, conservé ici comme référence (nord en haut). A=tour, F=place, E=égout, G=garage,
   // B=corps, !=clé USB, X=grille, +=cachettes, r=parcours en hauteur, C=épaves, L=lampadaires, t=arbres, s=abribus.
-  G.MAP_ASCII = `CARTE v1 (schéma). 1 caractère = 4 m. Nord en haut.
+  G.MAP_ASCII = `CARTE v2 (proposition, façon Sleeping Dogs). 1 caractère = 4 m. Nord en haut.
 
      0         1         2         3         4         5         6   
      0123456789012345678901234567890123456789012345678901234567890123
-  0  ########################################~~~~~~~~~~~~~~~~~~~~~~~~
-  1  ###########################X##############~~~~~~~~~~~~~~~~~~~~~~
-  2  #######################....################~~~~~~~~~~~~~~~~~~~~~
-  3  #####################..#####################~~~~L~~~~~~~~~~~~~~~
-  4  ###################..######################~~~~~~~~~~~~~~~~~DD~~
-  5  ##################.######################~~~~~~~~~~~~~~~~~~~DD~~
-  6  ##################.#####################~~~~~~~~~~C~~~~~~~~~~~~~
-  7  ###E###############.####################~~~~~~~~~~~~~~~~~~~~~~~~
-  8  ###.###############.:####################~s~~~~~~~~~~~~~~~~~~~~~
-  9  ###.############:::::::::###########......~~~~~~~~~~~t~~~~~~~~~~
- 10  ###.###########:::::::::::#######...#####~~~L~~~~~~~~~~~~~~~~~~~
- 11  ###.##########:::::::::::::####..#######~~~~~~~~~~~~~~~~~~~~~~x~
- 12  ###.+#########::::::F::::::....+######~~~~~~~~C~~~~~~~~~~~~~~~x~
- 13  ####.#########:::::::::::::#########~~~~~~~~~~~~~~~~~~~~~~~~~~x~
- 14  ####.#######..#:::::::::::#.##r####~~~~~~~~~~~~~~~~~~~~~~~t~~~x~
- 15  ####.####B..####:::::::::##.###r###~~~~~~~~~~~~~~~L~~~~~~~~~~~x~
- 16  #####.###.##.##r####:#.#####.###r####~~~~~~~~~~~~~~~~~~~~~~~~~x~
- 17  #####.#..###.#r######.#.#####.###r#####~~~~~~~~t~~~~~~~~~~~~~~x~
- 18  ######.######.######.##.#####.###r#######~~~~~~~~~~~~~~~~~~~~~x~
- 19  ######.#####.######.####.###+############~~~~~~~~~~~~~~~~~~~~~~~
- 20  ######.####r.!####.######....############~~~~~~~~~~~C~~~~~~~~~~~
- 21  ######.###r.#####.##########.############~~t~~~~~~~~~~~~~~~~~~~~
- 22  ######.....#+###.############..#########~~~~~~~~~~~~~~~~L~~~~~~~
- 23  ######.#r#####..###############.#########~~~~~~~~~~~~~~~~~~~~~~~
- 24  ######.######.##################...#######~~~~~~~~~t~~~~~~~~~~~~
- 25  ######A############################.G######~~~~~~~~~~~~~~~~~~~~~
- 26  #######################################s###~~C~~~~~~~~~~~~~~~~~~
- 27  ###########################################~~~~~~~~~~~~t~~~~~~~~
- 28  #########################################~~~~~~~~~~~~~~~~~~~~~~~
- 29  ######################################~~~~~~~~~~~~~~~~~~~~~~~~~~`;
+  0  ########################################~~~~~~~VV~~~~~~~~~~~~~~~
+  1  ###########################X##############~~~~~VV~~~~~~~~~~~~~~~
+  2  #######################....################~~~~VV~~~~~~~~~~~~~~~
+  3  ########TTTTTTTT#####..#####################~~~VV~~~~L~~~~~~~~~~
+  4  ########TTTTTTTT###..######################~~~~VV~~~~~~~~~~~~~~~
+  5  ########TTTTTTTT##.######################~~~L~~VV~~~~~~~~~~~~H~~
+  6  ########TTTTTTTT##.#####################~~~~~~~VV~~~~~C~~~~~~~~~
+  7  ###E####TTTTTTTT###.####################~~~~~~~VV~~~~~~~~~~~~~~~
+  8  ###.#########S#####.#####################~s~~~~VV~~~~~~~~~~~~~~~
+  9  ###.##########S####:::::Y:##########.....K~~~~~VV~L~~~~~~~t~~~~~
+ 10  ###.##########S###:::n:::::#####=...#####~~~~~~VV~~~~~~H~~~~~~~~
+ 11  ###.#############:::::::::::###..#######~~~~~~~VV~~~~~~~~~~~~~x~
+ 12  ###.+###########M:n:::F:::::...+######~~~~~~C~~VV~~~~~~~~~~~~~x~
+ 13  ####.########MeMe:::::::::::########~~~~~~~~~~~VV~~~~~~~~~~~~~x~
+ 14  ####=#####MMMeM##R:::::n:::.#######~~~~~~~~~~~~VV~~~~~~t~~~~~~x~
+ 15  ####.###MBMM####R##:::::::#.=######~~~~~~~~~~~~VV~~~L~~~~~~~~~x~
+ 16  #####.#MMM##.##R######.#####.########~~~~~~~~~~VV~~~~~~~~~~~t~x~
+ 17  #####.MnM#e#.#R######.#.#####.#########~~~~~~~~VV~~~~t~~~~~~~~x~
+ 18  #####MMM#e#=#.######.##.#####.###########~~~~C~VV~~~~~~~~~~~~~x~
+ 19  #####MMMe###.######.####.###+############~~~~~~VV~~~~~~~~~~~~~~~
+ 20  #####MMe###R.!####.######....############~~~~~~VV~~~C~~~~~H~~~~~
+ 21  #####MMM##R.#####.##########.############~~t~~~VV~~~~~~~~~~~~~~~
+ 22  #####nMM...#+###.############..#########~~~~~~~VV~~~~~~~~L~~~~~~
+ 23  #####MMMR#####..###############.#########~~~~~~VV~~t~~~~~~~~~~~~
+ 24  #####MMM......##################...#######~~~~~GV~~~~~~~~~~~~~~~
+ 25  ######A############################.......K~~~~VV~~~~~~~~~~~~~~~
+ 26  ###########################################~~~~VV~~C~~~~~~~~DD~~
+ 27  ###########################################~~~~VV~~~~~~~t~~~D~~~
+ 28  #########################################~~~~~~VV~~~~~~~~~~~~~~~
+ 29  ######################################~~~~~~~~~VV~~~~~~~~~~~~~~~
+
+Légende : # immeubles · . ruelle étroite · M rue du marché (large, étals) · : place des lanternes · ~ zone plate (brouillard, sans mur)
+A tour (départ) · F fontaine · E égout · G garage sous le viaduc · V viaduc d'autoroute en ruine · K contrôle de police · Y bouche de métro
+B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché · n enseignes (néon très faible) · T terrasse haute (+3 m) · S escalier
+= passerelle entre immeubles · R chemin sur les toits · C épaves · L lampadaires · t arbres morts · H pylône électrique · s abribus · x clôture · D silhouette lointaine`;
 
   // Case ASCII (colonne, ligne) -> monde (x, z). La tour (colonne 6, ligne 25) est à l'origine, sa façade à z = -2,65.
   const A = (c, r) => [(c - 6) * 4, (r - 25) * 4 - 0.65];
@@ -842,19 +851,19 @@
      1. L'ESPACE LIBRE
      --------------------------------------------------------------- */
   const ALLEYS = [   // w = demi-largeur en mètres
-    { w: 2.1, pts: [[0, -2.65], A(6, 18)] },                                                      // sortie de la tour (aussi large que la tour)
-    { w: 1.6, pts: [A(6, 18), A(4, 15), A(3, 11), A(3, 8)] },                                     // branche nord-ouest -> égout
-    { w: 2.0, pts: [A(6, 18), A(9, 16), A(12, 14), A(15, 13), A(18, 12)] },                       // branche nord-est -> place
-    { w: 1.5, pts: [A(6, 22), A(10, 22), A(12, 20), A(13, 18), A(12, 16)] },                      // boucle avec cour
-    { w: 2.2, pts: [A(20, 12), A(26, 12), A(30, 12), A(33, 10), A(37, 9), A(41, 9)] },            // vers la zone plate
-    { w: 2.0, pts: [A(21, 14), A(24, 19), A(28, 21), A(31, 23), A(35, 25)] },                     // vers le garage
-    { w: 1.8, pts: [A(19, 10), A(18, 5), A(21, 3), A(25, 2), A(27, 1)] },                         // vers le nord (grille)
-    { w: 1.7, pts: [A(26, 12), A(27, 15), A(29, 17), A(28, 21)] },                                // raccord central
-    { w: 1.6, pts: [A(6, 23), A(10, 24), A(13, 24), A(16, 22), A(19, 19), A(21, 17), A(23, 18)] }  // ruelle du sud
+    { w: 4.4, pts: [[0, -2.65], A(6, 19), A(8, 16), A(11, 14), A(15, 13), A(19, 12), A(22, 12)] },    // 0 : RUE DU MARCHÉ, large, de la tour à la place
+    { w: 1.6, pts: [A(6, 18), A(4, 15), A(3, 11), A(3, 8)] },                                          // 1 : branche nord-ouest -> égout
+    { w: 1.5, pts: [A(6, 22), A(10, 22), A(12, 20), A(13, 18), A(12, 16)] },                           // 2 : boucle avec cour (la clé USB)
+    { w: 2.2, pts: [A(22, 12), A(26, 12), A(30, 12), A(33, 10), A(37, 9), A(41, 9)] },                 // 3 : vers la zone plate (barrage de police)
+    { w: 2.0, pts: [A(22, 14), A(24, 19), A(28, 21), A(31, 23), A(35, 25), A(42, 25)] },               // 4 : vers le garage sous le viaduc
+    { w: 1.8, pts: [A(21, 10), A(18, 5), A(21, 3), A(25, 2), A(27, 1)] },                              // 5 : vers le nord (grille fermée)
+    { w: 1.7, pts: [A(26, 12), A(27, 15), A(29, 17), A(28, 21)] },                                     // 6 : raccord central
+    { w: 1.6, pts: [A(6, 23), A(10, 24), A(13, 24), A(16, 22), A(19, 19), A(21, 17), A(23, 16)] },     // 7 : ruelle du sud
+    { w: 1.8, pts: [[34, -50], [32, -58], [32, -71]] }                                                 // 8 : couloir de l'escalier vers la terrasse
   ];
-  const PLACE = { c: A(20, 12), rx: 22, rz: 13 };
+  const PLACE = { c: A(22, 12), rx: 22, rz: 15 };                  // place des lanternes
+  const TERRACE = { c: [22, -80.65], hx: 16, hz: 10 };             // terrasse haute (sol à +3,2 m)
   const ALCOVES = [A(4, 12), A(12, 22), A(28, 19), A(31, 12)];     // cachettes (porche, cour)
-  const GARAGE = { c: [126, -0.65], hx: 9, hz: 5.5 };
   const TOWER = { x0: -2.1, x1: 2.1, z0: -2.65, z1: 8.3 };         // la tour est pleine (elle a sa propre géométrie)
   const X0 = -30, X1 = 234, Z0 = -106, Z1 = 20;                    // limites de la carte (mètres)
 
@@ -876,9 +885,10 @@
     for (const a of ALLEYS) for (let i = 0; i < a.pts.length - 1; i++) d = Math.min(d, distSeg(x, z, a.pts[i], a.pts[i + 1]) - a.w);
     d = Math.min(d, (Math.sqrt(((x - PLACE.c[0]) / PLACE.rx) ** 2 + ((z - PLACE.c[1]) / PLACE.rz) ** 2) - 1) * PLACE.rz);
     for (const c of ALCOVES) d = Math.min(d, Math.hypot(x - c[0], z - c[1]) - 2.4);
-    d = Math.min(d, Math.max(Math.abs(x - GARAGE.c[0]) - GARAGE.hx, Math.abs(z - GARAGE.c[1]) - GARAGE.hz));
+    d = Math.min(d, Math.max(Math.abs(x - TERRACE.c[0]) - TERRACE.hx, Math.abs(z - TERRACE.c[1]) - TERRACE.hz));
     d += (vn(x / 7, z / 7) - 0.5) * 0.6 + (vn(x / 2.3, z / 2.3) - 0.5) * 0.3;
     const tx = Math.max(TOWER.x0 - x, x - TOWER.x1, TOWER.z0 - z, z - TOWER.z1);   // distance au rectangle de la tour (négatif dedans)
+    if (z > TOWER.z0 && x > -12 && x < 12) d = Math.max(d, 1);                     // les immeubles alignés avec la tour ferment la rue au sud
     return Math.max(d, -tx);
   }
 
@@ -914,7 +924,8 @@
       for (const y of levels) {
         const k = [0.6, 0.74, 0.89, 0.97, 1.0][Math.min(levels.indexOf(y), 4)] * (0.9 + 0.1 * G.hash2(mx * 1.7, y));
         for (const P of [[ax, az], [bx, bz]]) {
-          pos.push(P[0], y, P[1]); nor.push(nx, 0, nz); uv.push((useX ? P[1] : P[0]) / tile, y / tile); col.push(k, k, k);
+          const m = k * (0.8 + 0.5 * vn(P[0] / 5 + y * 0.11, P[1] / 5 + y * 0.17));          // grandes taches de crasse sur la façade
+          pos.push(P[0], y, P[1]); nor.push(nx, 0, nz); uv.push((useX ? P[1] : P[0]) / tile, y / tile); col.push(m, m * 0.98, m * 0.94);
         }
       }
       for (let r = 0; r < levels.length - 1; r++) { const a = base + r * 2; idxs.push(a, a + 1, a + 3, a, a + 3, a + 2); }
@@ -964,10 +975,8 @@
     G.addBoxCollider(X1, X1 + 5, -5, 40, Z0 - 5, Z1 + 5); G.addBoxCollider(X0 - 5, X1 + 5, -5, 40, Z0 - 5, Z0); G.addBoxCollider(X0 - 5, X1 + 5, -5, 40, Z1, Z1 + 5);
   }
 
-  /* ---------------------------------------------------------------
-     3. PROPS : lampadaires, tonneaux, caisses, barrières, épaves, arbres...
-     --------------------------------------------------------------- */
-  const M = () => G.mat;
+  // Outils partagés avec places.js et dressing.js
+  const alleyLen = a => a.pts.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - a.pts[i][0], q[1] - a.pts[i][1]), 0);
   function alleyPoint(a, dist) {     // point et direction à une distance donnée le long d'une ruelle
     let d = dist;
     for (let i = 0; i < a.pts.length - 1; i++) {
@@ -976,111 +985,8 @@
       d -= L;
     }
   }
-  const alleyLen = a => a.pts.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - a.pts[i][0], q[1] - a.pts[i][1]), 0);
-  function side(a, dist, off) { const p = alleyPoint(a, dist); return [p.x - p.dz * off, p.z + p.dx * off, Math.atan2(p.dx, p.dz)]; }   // décalé sur le côté (off > 0 = gauche)
-
-  function lamp(x, z, ax, az, color, I, halo, flick) {              // lampadaire sodium : pied en (x,z), bras vers (ax,az)
-    const pole = new T.Mesh(new T.CylinderGeometry(0.05, 0.07, 5.4, 8), M().iron); pole.position.set(x, 2.7, z); G.scene.add(pole);
-    const ang = Math.atan2(ax - x, az - z), arm = new T.Mesh(new T.BoxGeometry(0.07, 0.07, 1.0), M().iron);
-    arm.position.set(x + Math.sin(ang) * 0.5, 5.4, z + Math.cos(ang) * 0.5); arm.rotation.y = ang; G.scene.add(arm);
-    G.addBoxCollider(x - 0.08, x + 0.08, 0, 5.4, z - 0.08, z + 0.08);
-    G.addLamp({ x: x + Math.sin(ang) * 1.0, y: 5.3, z: z + Math.cos(ang) * 1.0, color: color || 0xffa44a, I: I || 0.95, dist: 14, halo: halo || 5.5, flicker: flick || 0, fogHalo: true });
-  }
-  function barrel(x, z) {
-    const b = new T.Mesh(new T.CylinderGeometry(0.3, 0.3, 0.9, 14), M().metal); b.position.set(x, 0.45, z); G.scene.add(b);
-    for (const y of [0.08, 0.45, 0.82]) { const r = new T.Mesh(new T.CylinderGeometry(0.315, 0.315, 0.04, 14), M().iron); r.position.set(x, y, z); G.scene.add(r); }
-    G.addBoxCollider(x - 0.3, x + 0.3, 0, 0.9, z - 0.3, z + 0.3);
-  }
-  const block = (x0, x1, y0, y1, z0, z1, mat) => G.B(x0, x1, y0, y1, z0, z1, mat || M().concreteDark, { grime: false });
-  function barrier(x, z, ry) {                                       // plot de béton bas, à enjamber (aligné sur un axe pour pouvoir être franchi)
-    const alongX = Math.abs(Math.sin(ry)) < 0.7, w = alongX ? 2.2 : 0.6, d = alongX ? 0.6 : 2.2;
-    block(x - w / 2, x + w / 2, 0, 0.85, z - d / 2, z + d / 2, M().concreteDark);
-  }
-  function wreck(x, z, ry) {                                          // épave de voiture rouillée (carrosserie, habitacle, roues)
-    const g = new T.Group(); g.position.set(x, 0, z); g.rotation.y = ry;
-    const add = (geo, mat, px, py, pz, rz) => { const m = new T.Mesh(geo, mat); m.position.set(px, py, pz); if (rz) m.rotation.z = rz; g.add(m); return m; };
-    add(new T.BoxGeometry(4.2, 0.75, 1.8), M().metal, 0, 0.62, 0); add(new T.BoxGeometry(2.1, 0.7, 1.6), M().metal, -0.3, 1.3, 0);
-    add(new T.BoxGeometry(1.9, 0.5, 1.62), M().glass, -0.3, 1.34, 0);
-    for (const [px, pz] of [[1.4, 0.9], [1.4, -0.9], [-1.4, 0.9], [-1.4, -0.9]]) { const w = add(new T.CylinderGeometry(0.34, 0.34, 0.25, 12), M().iron, px, 0.34, pz); w.rotation.x = Math.PI / 2; }
-    G.scene.add(g); G.addOBBCollider(x, z, 4.2, 1.8, ry, 0, 1.05);
-  }
-  function tree(x, z) {                                               // arbre mort : tronc effilé + branches
-    const g = new T.Group(); g.position.set(x, 0, z); const mat = M().iron;
-    const trunk = new T.Mesh(new T.CylinderGeometry(0.1, 0.22, 4.5, 7), mat); trunk.position.y = 2.25; g.add(trunk);
-    for (let i = 0; i < 6; i++) {
-      const a = i * 1.05 + G.rnd(), L = 1.4 + G.rnd() * 1.4, br = new T.Mesh(new T.CylinderGeometry(0.02, 0.07, L, 5), mat);
-      br.position.set(Math.cos(a) * L * 0.3, 3.2 + G.rnd() * 1.3, Math.sin(a) * L * 0.3); br.rotation.set(Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9); g.add(br);
-    }
-    G.scene.add(g); G.addBoxCollider(x - 0.2, x + 0.2, 0, 4.5, z - 0.2, z + 0.2);
-  }
-  function fountain(x, z) {                                           // fontaine à sec : bassin bas, pilier, lampe
-    const ring = new T.Mesh(new T.CylinderGeometry(2.7, 2.9, 0.7, 16, 1, true), M().concreteDark); ring.material = M().concreteDark.clone(); ring.material.side = T.DoubleSide; ring.position.set(x, 0.35, z); G.scene.add(ring);
-    const lip = new T.Mesh(new T.TorusGeometry(2.8, 0.14, 6, 20), M().concrete); lip.rotation.x = Math.PI / 2; lip.position.set(x, 0.72, z); G.scene.add(lip);
-    const water = new T.Mesh(new T.CircleGeometry(2.7, 16), M().puddle); water.rotation.x = -Math.PI / 2; water.position.set(x, 0.3, z); G.scene.add(water);
-    const col = new T.Mesh(new T.CylinderGeometry(0.28, 0.4, 2.2, 10), M().concreteDark); col.position.set(x, 1.1, z); G.scene.add(col);
-    for (let i = 0; i < 14; i++) { const a = i / 14 * 6.283, b = (i + 1) / 14 * 6.283; G.addSegCollider(x + Math.cos(a) * 2.9, z + Math.sin(a) * 2.9, x + Math.cos(b) * 2.9, z + Math.sin(b) * 2.9, 0, 0.75); }
-    G.addBoxCollider(x - 0.4, x + 0.4, 0, 2.2, z - 0.4, z + 0.4);
-    G.addLamp({ x, y: 2.5, z, color: 0xffa44a, I: 0.9, dist: 14, halo: 5, fogHalo: true, flicker: 0.12 });
-  }
-  function gate(cx, cz, dirx, dirz, hw) {                              // grille fermée en travers d'une ruelle
-    const px = -dirz, pz = dirx, ang = Math.atan2(px, pz), bars = [];
-    G.addSegCollider(cx - px * hw, cz - pz * hw, cx + px * hw, cz + pz * hw, 0, 3.2);
-    const cyl = new T.CylinderGeometry(0.02, 0.02, 3.0, 5), im = new T.InstancedMesh(cyl, M().iron, Math.round(hw * 2 / 0.14)), d = new T.Object3D();
-    for (let i = 0; i < im.count; i++) { const s = -hw + i * 0.14; d.position.set(cx + px * s, 1.5, cz + pz * s); d.updateMatrix(); im.setMatrixAt(i, d.matrix); }
-    G.scene.add(im);
-    for (const y of [0.1, 1.5, 2.95]) { const r = new T.Mesh(new T.BoxGeometry(hw * 2, 0.06, 0.06), M().iron); r.position.set(cx, y, cz); r.rotation.y = Math.atan2(-pz, px); G.scene.add(r); }
-  }
-  function crate(x, z, s, h) { const m = new T.Mesh(new T.BoxGeometry(s, h, s), M().wood); m.position.set(x, h / 2, z); G.scene.add(m); G.addBoxCollider(x - s / 2, x + s / 2, 0, h, z - s / 2, z + s / 2); }
-
-  function buildProps() {
-    // Lampadaires le long des ruelles (un côté puis l'autre)
-    ALLEYS.forEach((a, k) => {
-      const L = alleyLen(a);
-      for (let d = 7 + (k % 3) * 2, n = 0; d < L - 3; d += 14, n++) {
-        const p = alleyPoint(a, d), s = (n % 2 ? 1 : -1), off = a.w - 0.55;
-        lamp(p.x - p.dz * off * s, p.z + p.dx * off * s, p.x, p.z, 0xffa44a, 0.95, 5.5, (k + n) % 7 === 3 ? 0.5 : 0);
-      }
-    });
-    // Zone plate : lampadaires isolés, épaves, arbres morts, abribus, clôture
-    for (const [c, r] of [[44, 10], [50, 15], [56, 22], [48, 3], [52, 8]]) { const q = A(c, r); lamp(q[0], q[1], q[0] - 1, q[1], 0xffb060, 0.85, 6, (c + r) % 3 === 0 ? 0.35 : 0); }
-    for (const [c, r, ry] of [[46, 12, 0.5], [52, 20, 2.2], [45, 26, 1.1], [50, 6, 0.2]]) { const q = A(c, r); wreck(q[0], q[1], ry); }
-    for (const [c, r] of [[47, 17], [53, 9], [58, 14], [43, 21], [55, 27], [51, 24], [49, 12], [56, 5], [45, 5], [57, 19]]) { const q = A(c, r); tree(q[0], q[1]); }
-    { const q = A(42, 8); block(q[0] - 1.6, q[0] + 1.6, 2.4, 2.55, q[1] - 0.6, q[1] + 0.6, M().iron); for (const dx of [-1.5, 1.5]) block(q[0] + dx - 0.05, q[0] + dx + 0.05, 0, 2.4, q[1] - 0.5, q[1] - 0.4, M().iron); block(q[0] - 1.2, q[0] + 1.2, 0.4, 0.5, q[1] + 0.3, q[1] + 0.55, M().iron); }   // abribus
-    { const a = A(62, 11), b = A(62, 18), im = new T.InstancedMesh(new T.CylinderGeometry(0.03, 0.03, 2.4, 5), M().iron, 60), d = new T.Object3D();   // clôture au loin
-      for (let i = 0; i < 60; i++) { d.position.set(a[0], 1.2, a[1] + (b[1] - a[1]) * i / 59); d.updateMatrix(); im.setMatrixAt(i, d.matrix); } G.scene.add(im);
-      G.addSegCollider(a[0], a[1], b[0], b[1], 0, 2.4); block(a[0] - 0.05, a[0] + 0.05, 2.3, 2.4, a[1], b[1], M().iron); }
-
-    // Place : fontaine, corps du premier choc
-    { const q = A(20, 12); fountain(q[0], q[1]); }
-    { const a = ALLEYS[2], s = side(a, alleyLen(a) * 0.36, 1.1); G.buildBody(s[0], s[1], s[2] + 1.4); }
-
-    // Ruelle de la tour : barrière à enjamber, tonneaux, caisses
-    { const a = ALLEYS[0]; barrier(0.7, -11, 0.15); barrier(-0.8, -17.5, -0.2); let s = side(a, 18, 1.4); barrel(s[0], s[1]); barrel(s[0] + 0.55, s[1] + 0.5); s = side(a, 8, -1.3); crate(s[0], s[1], 0.9, 0.9); crate(s[0] + 0.95, s[1], 0.9, 0.9); crate(s[0] + 0.4, s[1] + 0.1, 0.8, 1.8); }
-    // La boucle avec cour : la clé USB sur une caisse
-    { const q = A(13, 20); crate(q[0], q[1], 0.9, 0.9); crate(q[0] - 1.1, q[1] + 0.4, 0.7, 0.6); barrel(q[0] + 1.4, q[1] - 0.8);
-      const usb = new T.Mesh(new T.BoxGeometry(0.05, 0.02, 0.16), new T.MeshPhongMaterial({ color: 0x8c98a4, shininess: 90, specular: 0xffffff })); usb.position.set(q[0], 0.92, q[1]); usb.rotation.y = 0.8; G.scene.add(usb);
-      const glint = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xdfe8ff, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 })); glint.position.set(q[0], 1.0, q[1]); glint.scale.set(0.25, 0.25, 1); G.scene.add(glint);
-      G.animated.push({ update() { glint.material.opacity = usb.visible ? 0.14 + 0.1 * Math.sin(performance.now() / 650) : 0; } });
-      G.interactables.push({ id: 'usb', pos: new T.Vector3(q[0], 0.95, q[1]), radius: 2.0, prompt: 'Prendre la clé USB',
-        use() { usb.visible = false; G.interactables = G.interactables.filter(i => i.id !== 'usb'); G.have = G.have || []; G.have.push('usb-colis'); G.say('Une clé USB. Plus lourde qu\'elle n\'en a l\'air. Il faut la ramener au garage.'); } }); }
-    // Égout (bout de la branche nord-ouest) : plaque et cadre rouillés
-    { const q = A(3, 8), m = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 0.04, 16), M().iron); m.position.set(q[0], 0.02, q[1] + 1.2); G.scene.add(m); const r = new T.Mesh(new T.TorusGeometry(0.5, 0.04, 6, 16), M().metal); r.rotation.x = Math.PI / 2; r.position.set(q[0], 0.04, q[1] + 1.2); G.scene.add(r); }
-    // Grille fermée au bout de l'allée nord
-    { const a = ALLEYS[6], e = a.pts[a.pts.length - 1], p = a.pts[a.pts.length - 2], L = Math.hypot(e[0] - p[0], e[1] - p[1]), dx = (e[0] - p[0]) / L, dz = (e[1] - p[1]) / L; gate(e[0] - dx * 1.2, e[1] - dz * 1.2, dx, dz, a.w + 0.5); }
-    // Ruelle est : parcours de parkour. Escalier de blocs côté sud, puis passerelle suspendue en travers.
-    { const a = A(30, 12), z = a[1]; const hs = [1.1, 2.3, 3.5, 4.7];
-      hs.forEach((h, i) => block(a[0] - 8 + i * 1.7, a[0] - 8 + (i + 1) * 1.7, 0, h, z - 0.85, z + 0.85, i % 2 ? M().concrete : M().concreteDark));
-      block(a[0] - 1.1, a[0] + 1.9, 5.4, 5.7, z - 6.5, z + 6.5, M().iron);                                    // passerelle
-      for (const s of [-1, 1]) block(a[0] - 1.1, a[0] + 1.9, 5.7, 6.6, z + s * 6.5 - 0.04, z + s * 6.5 + 0.04, M().iron); }
-    // Place : plots de béton et caisses à enjamber
-    { const q = A(20, 12); barrier(q[0] + 10, q[1] + 5, 0.4); barrier(q[0] - 9, q[1] - 6, -0.3); barrier(q[0] + 4, q[1] - 9, 1.2); crate(q[0] - 6, q[1] + 8, 1.0, 1.1); crate(q[0] - 7.1, q[1] + 8.2, 1.0, 2.1); }
-    // Garage (hub futur) : épave de voiture au biodiesel, bidons, atelier
-    { const g = GARAGE.c; wreck(g[0] + 1, g[1] - 1.5, 0.35); barrel(g[0] - 6, g[1] + 3.5); barrel(g[0] - 5.4, g[1] + 3.8); barrel(g[0] - 6.1, g[1] + 4.4);
-      block(g[0] + 2, g[0] + 7.5, 0, 0.95, g[1] + 3.5, g[1] + 4.7, M().iron);                                  // établi
-      G.addLamp({ x: g[0], y: 4.2, z: g[1], color: 0xd9d09a, I: 1.0, dist: 11, halo: 1.6, flicker: 0.3 }); }
-    // Divers dans les ruelles : barrières à enjamber, sacs, tonneaux
-    ALLEYS.slice(1).forEach((a, k) => { const L = alleyLen(a); const s = side(a, L * 0.55, 0); barrier(s[0], s[1], s[2] + (k % 2 ? 1.57 : 0.3)); if (k % 2 === 0) { const t = side(a, L * 0.3, a.w - 0.7); barrel(t[0], t[1]); } });
-  }
+  function side(a, dist, off) { const p = alleyPoint(a, dist); return [p.x - p.dz * off, p.z + p.dx * off, Math.atan2(p.dx, p.dz)]; }   // décalé sur le côté
+  G.city = { ALLEYS, PLACE, TERRACE, ALCOVES, TOWER, X0, X1, Z0, Z1, A, sdf, xlim, vn, alleyLen, alleyPoint, side };
 
   /* ---------------------------------------------------------------
      POINT D'ENTRÉE
@@ -1089,10 +995,643 @@
     buildGround();
     const walls = buildWalls();
     buildFacadeDetails(walls);
-    buildProps();
+    G.city.walls = walls;
+    G.buildPlaces();           // marché, terrasse, ponts, viaduc, garage, barrages (places.js)
+    G.buildDressing(walls);    // saleté, devantures, câbles, débris (dressing.js)
   };
 
-  G.loaded.push('city');
+    G.loaded.push('city');
+})();
+
+</script>
+<script>
+/* ---- js/places.js ---- */
+/* =====================================================================
+   places.js : les LIEUX et les gros éléments de décor, placés sur le tracé de city.js.
+   Marché, place, escalier + terrasse haute, passerelles, viaduc en ruine + garage, barrages de police,
+   pylônes, bouche de métro, épaves, scooters, bennes, fûts qui brûlent...
+   Les petits détails (saleté, câbles, devantures, débris) sont dans dressing.js.
+   ===================================================================== */
+(function () {
+  'use strict';
+  const G = window.G, T = G.T;
+  const C = () => G.city, M = () => G.mat, A = (c, r) => G.mapWorld(c, r);
+  const rnd = () => G.rnd();
+  const ph = (c, s) => new T.MeshPhongMaterial({ color: c, shininess: s === undefined ? 4 : s, side: T.DoubleSide });
+  const PAL = [0x3b4038, 0x4a4540, 0x2f3a3c, 0x4b3f38, 0x37393f, 0x44453c].map(c => ph(c, 2));       // bâches, tissus : tons ternes
+  const pick = arr => arr[Math.floor(rnd() * arr.length)];
+  const block = (x0, x1, y0, y1, z0, z1, mat) => G.B(x0, x1, y0, y1, z0, z1, mat || M().concreteDark, { grime: false });
+  const toWorld = (x, z, ry, lx, lz) => [x + lx * Math.cos(ry) + lz * Math.sin(ry), z - lx * Math.sin(ry) + lz * Math.cos(ry)];
+  const mesh = (geo, mat, x, y, z, parent) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); (parent || G.scene).add(m); return m; };
+
+  /* ---------- Éléments de base ---------- */
+  function lamp(x, z, ax, az, o) {                                  // lampadaire sodium : pied en (x,z), bras vers (ax,az)
+    o = o || {};
+    const pole = mesh(new T.CylinderGeometry(0.05, 0.07, 5.4, 8), M().iron, x, 2.7, z), ang = Math.atan2(ax - x, az - z);
+    const arm = mesh(new T.BoxGeometry(0.07, 0.07, 1.0), M().iron, x + Math.sin(ang) * 0.5, 5.4, z + Math.cos(ang) * 0.5); arm.rotation.y = ang;
+    G.addBoxCollider(x - 0.08, x + 0.08, 0, 5.4, z - 0.08, z + 0.08);
+    const broken = o.broken !== undefined ? o.broken : rnd() < 0.12;                   // certains sont morts : plus noir, plus Outlast
+    G.addLamp({ x: x + Math.sin(ang) * 1.0, y: 5.3, z: z + Math.cos(ang) * 1.0, color: o.color || 0xffa44a, I: broken ? 0 : (o.I || 0.95), dist: 14, halo: broken ? 0 : (o.halo || 5.5), flicker: o.flicker !== undefined ? o.flicker : (rnd() < 0.3 ? 0.45 : 0), fogHalo: true });
+  }
+  function barrel(x, z) {
+    mesh(new T.CylinderGeometry(0.3, 0.3, 0.9, 14), M().metal, x, 0.45, z);
+    for (const y of [0.08, 0.45, 0.82]) mesh(new T.CylinderGeometry(0.315, 0.315, 0.04, 14), M().iron, x, y, z);
+    G.addBoxCollider(x - 0.3, x + 0.3, 0, 0.9, z - 0.3, z + 0.3);
+  }
+  function fireBarrel(x, z) {                                       // fût qui brûle : vraie lumière chaude qui vacille
+    barrel(x, z);
+    const f = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xff8a3a, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.7 }));
+    f.position.set(x, 1.05, z); f.scale.set(0.9, 1.1, 1); G.scene.add(f);
+    G.animated.push({ update() { f.scale.set(0.8 + 0.25 * Math.random(), 1.0 + 0.4 * Math.random(), 1); } });
+    G.addLamp({ x, y: 1.3, z, color: 0xff8a3a, I: 1.2, dist: 10, halo: 2.4, flicker: 6, bulb: false });
+  }
+  function crate(x, z, s, h) { mesh(new T.BoxGeometry(s, h, s), M().wood, x, h / 2, z).rotation.y = (rnd() - 0.5) * 0.4; G.addBoxCollider(x - s / 2, x + s / 2, 0, h, z - s / 2, z + s / 2); }
+  function barrier(x, z, ry, len) {                                  // plot de béton bas, à enjamber (aligné sur un axe)
+    len = len || 1.6; const alongX = Math.abs(Math.sin(ry)) < 0.7, w = alongX ? len : 0.6, d = alongX ? 0.6 : len;
+    block(x - w / 2, x + w / 2, 0, 0.85, z - d / 2, z + d / 2);
+  }
+  function dumpster(x, z, ry) {
+    const g = new T.Group(); g.position.set(x, 0, z); g.rotation.y = ry; G.scene.add(g);
+    mesh(new T.BoxGeometry(1.8, 1.0, 1.0), M().dumpster, 0, 0.55, 0, g);
+    const lid = mesh(new T.BoxGeometry(1.86, 0.06, 1.05), M().dumpster, 0, 1.12, -0.35, g); lid.rotation.x = 0.4;       // couvercle entrouvert
+    for (const sx of [-0.7, 0.7]) for (const sz of [-0.4, 0.4]) mesh(new T.CylinderGeometry(0.08, 0.08, 0.06, 8), M().iron, sx, 0.08, sz, g).rotation.z = Math.PI / 2;
+    G.addOBBCollider(x, z, 1.8, 1.0, ry, 0, 1.1);
+  }
+  function wreck(x, z, ry, o) {                                       // épave : carrosserie, habitacle, roues ; o.van = fourgon
+    o = o || {}; const L = o.van ? 5.0 : 4.2, Hh = o.van ? 1.7 : 0.75;
+    const g = new T.Group(); g.position.set(x, 0, z); g.rotation.y = ry;
+    const add = (geo, mat, px, py, pz) => { const m = new T.Mesh(geo, mat); m.position.set(px, py, pz); g.add(m); return m; };
+    add(new T.BoxGeometry(L, Hh, 1.9), o.mat || M().metal, 0, 0.55 + Hh / 2 - 0.15, 0);
+    if (!o.van) { add(new T.BoxGeometry(2.1, 0.7, 1.6), o.mat || M().metal, -0.3, 1.3, 0); add(new T.BoxGeometry(1.9, 0.5, 1.62), M().glass, -0.3, 1.34, 0); }
+    else add(new T.BoxGeometry(1.4, 0.7, 1.92), M().glass, L / 2 - 1.0, 1.7, 0);
+    for (const [px, pz] of [[L / 2 - 0.8, 0.95], [L / 2 - 0.8, -0.95], [-L / 2 + 0.8, 0.95], [-L / 2 + 0.8, -0.95]]) add(new T.CylinderGeometry(0.34, 0.34, 0.25, 12), M().iron, px, 0.34, pz).rotation.x = Math.PI / 2;
+    G.scene.add(g); G.addOBBCollider(x, z, L, 1.9, ry, 0, o.van ? 2.0 : 1.05); return g;
+  }
+  function scooter(x, z, ry) {                                       // scooter / triporteur abandonné
+    const g = new T.Group(); g.position.set(x, 0, z); g.rotation.y = ry; G.scene.add(g);
+    mesh(new T.BoxGeometry(1.5, 0.35, 0.5), M().plastic, 0, 0.5, 0, g); mesh(new T.BoxGeometry(0.5, 0.3, 0.45), M().cloth, -0.3, 0.8, 0, g);
+    mesh(new T.CylinderGeometry(0.28, 0.28, 0.12, 10), M().iron, 0.6, 0.28, 0, g).rotation.x = Math.PI / 2; mesh(new T.CylinderGeometry(0.28, 0.28, 0.12, 10), M().iron, -0.6, 0.28, 0, g).rotation.x = Math.PI / 2;
+    mesh(new T.BoxGeometry(0.06, 0.06, 0.8), M().iron, 0.7, 1.0, 0, g); G.addOBBCollider(x, z, 1.6, 0.6, ry, 0, 0.9);
+  }
+  function tree(x, z, y0) {                                           // arbre mort : tronc effilé + branches (y0 = hauteur du sol)
+    y0 = y0 || 0; const g = new T.Group(); g.position.set(x, y0, z); const mat = M().iron;
+    mesh(new T.CylinderGeometry(0.1, 0.22, 4.5, 7), mat, 0, 2.25, 0, g);
+    for (let i = 0; i < 6; i++) { const a = i * 1.05 + rnd(), L = 1.4 + rnd() * 1.4, br = mesh(new T.CylinderGeometry(0.02, 0.07, L, 5), mat, Math.cos(a) * L * 0.3, 3.2 + rnd() * 1.3, Math.sin(a) * L * 0.3, g); br.rotation.set(Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9); }
+    G.scene.add(g); G.addBoxCollider(x - 0.2, x + 0.2, y0, y0 + 4.5, z - 0.2, z + 0.2);
+  }
+  function gate(cx, cz, dirx, dirz, hw) {                              // grille fermée en travers d'une ruelle
+    const px = -dirz, pz = dirx;
+    G.addSegCollider(cx - px * hw, cz - pz * hw, cx + px * hw, cz + pz * hw, 0, 3.2);
+    const im = new T.InstancedMesh(new T.CylinderGeometry(0.02, 0.02, 3.0, 5), M().iron, Math.round(hw * 2 / 0.14)), d = new T.Object3D();
+    for (let i = 0; i < im.count; i++) { const s = -hw + i * 0.14; d.position.set(cx + px * s, 1.5, cz + pz * s); d.updateMatrix(); im.setMatrixAt(i, d.matrix); }
+    G.scene.add(im);
+    for (const y of [0.1, 1.5, 2.95]) mesh(new T.BoxGeometry(hw * 2, 0.06, 0.06), M().iron, cx, y, cz).rotation.y = Math.atan2(-pz, px);
+  }
+  // Un policier (utilisé aussi par cops.js) : uniforme sombre, casque, gilet ; parties nommées pour l'animation
+  G.makeCop = function () {
+    const g = new T.Group(), P = c => new T.MeshPhongMaterial({ color: c, shininess: 6 });
+    const uni = P(0x1c2228), vest = P(0x2c343b), helm = P(0x101418), skin = P(0x6d625c), boot = P(0x08090a);
+    const parts = {};
+    parts.torso = G.limb(g, vest, [0, 1.0, 0], [0, 1.5, 0], 0.2, 0.23, 8); G.ball(g, vest, [0, 1.5, 0], 0.22, 1, 0.5, 0.8, 8);
+    parts.head = new T.Group(); parts.head.position.set(0, 1.72, 0); g.add(parts.head);
+    G.ball(parts.head, skin, [0, 0, 0], 0.11, 0.9, 1.05, 1, 10); G.ball(parts.head, helm, [0, 0.06, 0], 0.135, 1, 0.8, 1.05, 10);
+    const visor = new T.Mesh(new T.BoxGeometry(0.2, 0.05, 0.05), P(0x20282e)); visor.position.set(0, 0.0, 0.1); parts.head.add(visor);
+    for (const s of [-1, 1]) {
+      const arm = new T.Group(); arm.position.set(s * 0.26, 1.45, 0); g.add(arm); G.limb(arm, uni, [0, 0, 0], [0, -0.55, 0], 0.07, 0.055, 6); parts['arm' + s] = arm;
+      const leg = new T.Group(); leg.position.set(s * 0.11, 1.0, 0); g.add(leg); G.limb(leg, uni, [0, 0, 0], [0, -1.0, 0], 0.1, 0.07, 6); G.ball(leg, boot, [0, -1.0, 0.04], 0.08, 0.9, 0.6, 1.6, 6); parts['leg' + s] = leg;
+    }
+    const baton = new T.Mesh(new T.CylinderGeometry(0.02, 0.025, 0.7, 5), P(0x0a0a0a)); baton.position.set(0, -0.45, 0.15); baton.rotation.x = 1.2; parts['arm1'].add(baton);
+    g.userData.parts = parts; return g;
+  };
+
+  /* ---------- Marché : étals bâchés, lampes nues ---------- */
+  function stall(x, z, ry) {                                          // le devant de l'étal regarde +z local (vers la rue)
+    const g = new T.Group(); g.position.set(x, 0, z); g.rotation.y = ry; G.scene.add(g);
+    const tarp = pick(PAL);
+    mesh(new T.BoxGeometry(2.4, 0.9, 0.7), M().wood, 0, 0.45, 0.5, g);
+    for (const px of [-1.3, 1.3]) for (const [pz, h] of [[-0.6, 2.6], [0.95, 2.1]]) mesh(new T.CylinderGeometry(0.035, 0.035, h, 5), M().iron, px, h / 2, pz, g);
+    mesh(new T.BoxGeometry(3.0, 0.04, 1.9), tarp, 0, 2.4, 0.2, g).rotation.x = 0.2;                                    // bâche penchée vers la rue
+    mesh(new T.BoxGeometry(3.0, 0.5, 0.03), tarp, 0, 2.1, 1.12, g);                                                    // bavolet
+    for (let i = 0; i < 9; i++) { const s = 0.1 + rnd() * 0.2; const it = mesh(rnd() < 0.5 ? new T.BoxGeometry(s, s * 0.8, s) : new T.CylinderGeometry(s * 0.45, s * 0.45, s, 7), pick(PAL), -1 + rnd() * 2, 0.9 + s * 0.4, 0.3 + rnd() * 0.4, g); it.rotation.y = rnd() * 3; }
+    const c1 = toWorld(x, z, ry, 1.7, -0.2); if (rnd() < 0.7) crate(c1[0], c1[1], 0.7, 0.7 + rnd() * 0.5);
+    const cw = toWorld(x, z, ry, 0, 0.5); G.addOBBCollider(cw[0], cw[1], 2.4, 0.7, ry, 0, 0.95);
+    const lw = toWorld(x, z, ry, 0, 0.9); G.addLamp({ x: lw[0], y: 2.1, z: lw[1], color: 0xe6c488, I: 0.55, dist: 7, halo: 1.3, flicker: rnd() < 0.35 ? 0.5 : 0 });
+  }
+  function market() {
+    const a = C().ALLEYS[0], L = C().alleyLen(a);
+    for (let d = 13; d < L - 7; d += 8) for (const s of [-1, 1]) {
+      if (rnd() < 0.15) continue;
+      const off = s * (a.w - 1.5), p = C().alleyPoint(a, d + (s > 0 ? 3 : 0)), x = p.x - p.dz * off, z = p.z + p.dx * off;
+      stall(x, z, Math.atan2(p.x - x, p.z - z));
+    }
+    const pl = C().PLACE;                                              // la place : quelques étals en anneau, désordre
+    for (let i = 0; i < 7; i++) { const t = i / 7 * 6.283 + 0.4, x = pl.c[0] + Math.cos(t) * pl.rx * 0.62, z = pl.c[1] + Math.sin(t) * pl.rz * 0.62; if (i % 3 !== 1) stall(x, z, Math.atan2(pl.c[0] - x, pl.c[1] - z)); }
+    // Fontaine à sec au centre de la place
+    const f = pl.c;
+    const ring = mesh(new T.CylinderGeometry(2.7, 2.9, 0.7, 16, 1, true), ph(0x3a3d3a, 3), f[0], 0.35, f[1]);
+    const lip = mesh(new T.TorusGeometry(2.8, 0.14, 6, 20), M().concrete, f[0], 0.72, f[1]); lip.rotation.x = Math.PI / 2;
+    const water = mesh(new T.CircleGeometry(2.7, 16), M().puddle, f[0], 0.3, f[1]); water.rotation.x = -Math.PI / 2;
+    mesh(new T.CylinderGeometry(0.28, 0.4, 2.2, 10), M().concreteDark, f[0], 1.1, f[1]);
+    for (let i = 0; i < 14; i++) { const t0 = i / 14 * 6.283, t1 = (i + 1) / 14 * 6.283; G.addSegCollider(f[0] + Math.cos(t0) * 2.9, f[1] + Math.sin(t0) * 2.9, f[0] + Math.cos(t1) * 2.9, f[1] + Math.sin(t1) * 2.9, 0, 0.75); }
+    G.addBoxCollider(f[0] - 0.4, f[0] + 0.4, 0, 2.2, f[1] - 0.4, f[1] + 0.4);
+    G.addLamp({ x: f[0], y: 2.5, z: f[1], color: 0xffa44a, I: 0.9, dist: 14, halo: 5, fogHalo: true, flicker: 0.12 });
+    // Fûts qui brûlent : points chauds dans le froid
+    const s0 = C().side(a, 24, 2.6); fireBarrel(s0[0], s0[1]); fireBarrel(f[0] + 8, f[1] + 5);
+  }
+
+  /* ---------- Terrasse haute (+3,2 m), escalier ---------- */
+  function terrace() {
+    const t = C().TERRACE, Y = 3.2;
+    for (let i = 0; i < 16; i++) block(29.4, 34.6, 0, 0.2 * (i + 1), -58 - i * 0.75, -58 - (i + 1) * 0.75, i % 2 ? M().concrete : M().concreteDark);     // escalier : 16 marches
+    block(t.c[0] - t.hx, t.c[0] + t.hx, Y - 0.6, Y, t.c[1] - t.hz, t.c[1] + t.hz, M().concrete);                       // le sol de la terrasse
+    block(29.4, 34.6, Y - 0.6, Y, -70.7, -69.9, M().concrete);
+    for (const [dx, dz] of [[-11, -6], [-3, -7.5], [6, -6.5], [12, -3], [-9, 4], [4, 6]]) { const x = t.c[0] + dx, z = t.c[1] + dz; block(x - 1.1, x + 1.1, Y, Y + 0.7, z - 0.5, z + 0.5, M().concreteDark); if (rnd() < 0.6) tree(x, z, Y + 0.7); }   // jardinières, arbres morts
+    for (const [dx, dz] of [[-6, 6], [8, 7]]) { const x = t.c[0] + dx, z = t.c[1] + dz; block(x - 0.9, x + 0.9, Y + 0.38, Y + 0.45, z - 0.25, z + 0.25, M().wood); block(x - 0.8, x - 0.7, Y, Y + 0.38, z - 0.2, z + 0.2, M().iron); block(x + 0.7, x + 0.8, Y, Y + 0.38, z - 0.2, z + 0.2, M().iron); }   // bancs
+    const wx = t.c[0] + 13, wz = t.c[1] - 7;                                                                              // citerne d'eau rouillée
+    mesh(new T.CylinderGeometry(1.2, 1.2, 2.6, 14), M().metal, wx, Y + 1.3, wz); G.addBoxCollider(wx - 1.1, wx + 1.1, Y, Y + 2.6, wz - 1.1, wz + 1.1);
+    for (const [dx, dz] of [[-13, 5], [0, 8], [11, 8]]) G.addLamp({ x: t.c[0] + dx, y: Y + 3.6, z: t.c[1] + dz, color: 0xd9d09a, I: 0.9, dist: 11, halo: 1.5, flicker: rnd() < 0.5 ? 0.4 : 0 });
+    G.terraceY = Y;
+  }
+  /* ---------- Passerelles au-dessus des ruelles, avec leur petit escalier de caisses ---------- */
+  function bridge(c, r, axis, len) {
+    const p = A(c, r), Y = 4.4, hw = 0.8;
+    if (axis === 'x') { block(p[0] - len, p[0] + len, Y - 0.25, Y, p[1] - hw, p[1] + hw, M().iron); for (const s of [-1, 1]) block(p[0] - len, p[0] + len, Y, Y + 0.9, p[1] + s * hw - 0.03, p[1] + s * hw + 0.03, M().iron); }
+    else { block(p[0] - hw, p[0] + hw, Y - 0.25, Y, p[1] - len, p[1] + len, M().iron); for (const s of [-1, 1]) block(p[0] + s * hw - 0.03, p[0] + s * hw + 0.03, Y, Y + 0.9, p[1] - len, p[1] + len, M().iron); }
+    // Les caisses : 3 blocs de plus en plus hauts, collés à UN mur de la ruelle, en s'approchant de la passerelle
+    const nearest = C().ALLEYS.reduce((best, al) => { for (let d = 0; d < C().alleyLen(al); d += 1) { const q = C().alleyPoint(al, d), dd = Math.hypot(q.x - p[0], q.z - p[1]); if (dd < best.dd) best = { dd, al, d, q }; } return best; }, { dd: 1e9 });
+    const al = nearest.al, dir = nearest.q, lat = al.w - 0.85;
+    [1.1, 2.2, 3.3].forEach((h, i) => {
+      const along = -(1.55 * (3 - i)) + 0.4, x = p[0] + dir.dx * along - dir.dz * lat, z = p[1] + dir.dz * along + dir.dx * lat;
+      block(x - 0.7, x + 0.7, 0, h, z - 0.7, z + 0.7, i % 2 ? M().concrete : M().concreteDark);
+    });
+    G.addLamp({ x: p[0], y: Y - 0.7, z: p[1], color: 0xd9d09a, I: 0.6, dist: 8, halo: 1.2, flicker: 0.5 });
+  }
+  /* ---------- Viaduc en ruine, garage dessous ---------- */
+  function viaduct() {
+    const x0 = A(46, 0)[0], x1 = x0 + 9, zA = C().Z0 + 2, zB = C().Z1 - 2;
+    for (const [a, b] of [[zA, -64], [-46, zB]]) block(x0, x1, 8, 9, a, b, M().concreteDark);                              // le tablier, coupé au milieu
+    for (const z of [-96, -78, -64, -46, -26, 4, 14]) block(x0 + 3, x0 + 6, 0, 8, z - 1.2, z + 1.2, M().concrete);        // piliers
+    for (const z of [-64, -46]) block(x0 + 1, x0 + 8, 6.2, 8, z - 0.2, z + 0.2, M().concreteDark);                         // bouts cassés qui pendent
+  }
+  function garage() {                                                  // hangar sous le viaduc : le futur hub
+    const gx = A(46, 24)[0] - 8, gz = A(46, 24)[1], x0 = gx - 6, x1 = gx + 12, z0 = gz - 5, z1 = gz + 5;
+    G.wall('z', z0 - 0.3, z0, x0, x1, 0, 4, [], M().metal); G.wall('z', z1, z1 + 0.3, x0, x1, 0, 4, [], M().metal);
+    G.wall('x', x1, x1 + 0.3, z0, z1, 0, 4, [], M().metal); G.wall('x', x0 - 0.3, x0, z0, z1, 0, 4, [[gz - 2.5, gz + 2.5, 0, 3.4]], M().metal);            // la porte : grande ouverture côté ville
+    G.B(x0 - 0.3, x1 + 0.3, 4, 4.3, z0 - 0.3, z1 + 0.3, M().metal, { grime: false });                                                                        // toit
+    wreck(gx + 4, gz - 1.5, 0.3, { van: true }); barrel(x1 - 1, z0 + 1); barrel(x1 - 1.6, z0 + 1.3); barrel(x1 - 1, z0 + 2.2);
+    block(x0 + 3, x0 + 8.5, 0, 0.95, z1 - 1.3, z1 - 0.2, M().iron);                                                                                      // établi
+    G.addLamp({ x: gx, y: 3.6, z: gz, color: 0xd9d09a, I: 1.1, dist: 12, halo: 1.8, flicker: 0.3 });
+  }
+  /* ---------- Barrages de police : herses, fourgon, projecteur, deux policiers qui attendent ---------- */
+  G.checkpoints = [];
+  function checkpoint(c, r) {
+    const p = A(c, r), bx = p[0] - 2.5;
+    for (const dz of [-3.2, -1.3 + 0.0, 2.2]) block(bx - 0.3, bx + 0.3, 0, 0.85, p[1] + dz - 1.1, p[1] + dz + 1.1);              // chicane : un passage de 1,5 m au milieu
+    wreck(p[0] + 2.5, p[1] + 3.5, 0.2, { van: true, mat: M().plastic });
+    G.addLamp({ x: p[0] + 2.5, y: 2.3, z: p[1] + 3.5, color: 0x4a78ff, I: 0.9, dist: 9, halo: 2.2, flicker: 4 });             // gyrophare
+    mesh(new T.CylinderGeometry(0.04, 0.05, 2.6, 6), M().iron, p[0] + 1.0, 1.3, p[1] - 3.5);
+    G.addLamp({ x: p[0] + 1.0, y: 2.7, z: p[1] - 3.5, color: 0xdfe8ff, I: 1.7, dist: 18, halo: 4, fogHalo: true });                      // projecteur froid
+    for (const dz of [-0.9, 0.9]) { const cop = G.makeCop(); cop.position.set(bx + 1.2, 0, p[1] + dz); cop.rotation.y = -Math.PI / 2; G.scene.add(cop); G.checkpoints.push({ cop, home: [bx + 1.2, p[1] + dz] }); }
+  }
+  function pylon(x, z) {                                               // pylône électrique en treillis
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const l = mesh(new T.CylinderGeometry(0.1, 0.18, 26, 5), M().iron, x + sx * 1.3, 13, z + sz * 1.3); l.rotation.set(sz * 0.06, 0, -sx * 0.06); }
+    for (const y of [4, 10, 16, 22]) for (const s of [0, 1]) mesh(new T.BoxGeometry(s ? 0.08 : 2.6, 0.08, s ? 2.6 : 0.08), M().iron, x, y, z + (s ? 0 : 1.3 * (y % 8 ? 1 : -1)));
+    G.addBoxCollider(x - 1.5, x + 1.5, 0, 3, z - 1.5, z + 1.5);
+  }
+  function metro() {                                                   // entrée de métro condamnée
+    const p = A(24, 9);
+    block(p[0] - 2.2, p[0] + 2.2, 0, 3.2, p[1] - 0.2, p[1] + 0.2, M().concrete); block(p[0] - 2.2, p[0] - 1.9, 0, 3.2, p[1] - 3, p[1], M().concrete); block(p[0] + 1.9, p[0] + 2.2, 0, 3.2, p[1] - 3, p[1], M().concrete);
+    block(p[0] - 2.4, p[0] + 2.4, 3.2, 3.5, p[1] - 3.2, p[1] + 0.4, M().concreteDark);
+    gate(p[0], p[1] + 0.35, 0, -1, 1.8);
+  }
+
+  function scatterBig() {                                              // épaves, bennes, scooters, barrières : posés le long des murs, dans le sens de la ruelle
+    const sets = [[1, 20, 'dumpster'], [1, 35, 'scooter'], [3, 14, 'scooter'], [4, 22, 'wreck'], [4, 40, 'dumpster'], [5, 18, 'dumpster'], [6, 8, 'scooter'], [7, 16, 'wreck'], [7, 30, 'scooter'], [2, 10, 'dumpster'], [3, 32, 'barrier'], [5, 9, 'barrier'], [6, 14, 'barrier'], [4, 10, 'barrier'], [1, 8, 'barrier']];
+    for (const [k, d, type] of sets) {
+      const a = C().ALLEYS[k], L = C().alleyLen(a); if (d > L - 3) continue;
+      if (type === 'wreck' && a.w < 1.9) continue;                                   // pas d'épave dans les ruelles trop étroites
+      const lat = (rnd() < 0.5 ? 1 : -1) * (a.w - (type === 'wreck' ? 1.15 : type === 'barrier' ? 0.9 : 0.95)), s = C().side(a, d, lat), ry = s[2] + Math.PI / 2;
+      if (type === 'dumpster') dumpster(s[0], s[1], ry); else if (type === 'scooter') scooter(s[0], s[1], ry); else if (type === 'wreck') wreck(s[0], s[1], ry, {}); else barrier(s[0], s[1], s[2], Math.min(2.2, 2 * a.w - 1.7));
+    }
+    const a0 = C().ALLEYS[0]; const m = C().side(a0, 15, -2.6); barrier(m[0], m[1], 0.3); const m2 = C().side(a0, 30, 3.0); wreck(m2[0], m2[1], m2[2] + Math.PI / 2, {});
+  }
+
+  G.buildPlaces = function () {
+    const a = C().ALLEYS;
+    // Lampadaires le long des ruelles (un côté, puis l'autre ; certains morts ou qui clignotent)
+    a.forEach((al, k) => { if (k === 8) return; const L = C().alleyLen(al); for (let d = 7 + (k % 3) * 2, n = 0; d < L - 3; d += 14, n++) { const p = C().alleyPoint(al, d), s = n % 2 ? 1 : -1, off = al.w - 0.6; lamp(p.x - p.dz * off * s, p.z + p.dx * off * s, p.x, p.z); } });
+    // Zone plate : lampadaires isolés, épaves, arbres morts, abribus, clôture, pylônes
+    for (const [c, r] of [[44, 10], [50, 15], [57, 22], [53, 3], [50, 9]]) { const q = A(c, r); lamp(q[0], q[1], q[0] - 1, q[1], { color: 0xffb060, I: 0.85, halo: 6 }); }
+    for (const [c, r, ry] of [[44, 12, 0.5], [52, 20, 2.2], [51, 26, 1.1], [54, 6, 0.2], [45, 18, 1.9]]) { const q = A(c, r); wreck(q[0], q[1], ry); }
+    for (const [c, r] of [[53, 17], [58, 9], [55, 14], [43, 21], [56, 27], [51, 23], [60, 16]]) { const q = A(c, r); tree(q[0], q[1]); }
+    { const q = A(42, 8); block(q[0] - 1.6, q[0] + 1.6, 2.4, 2.55, q[1] - 0.6, q[1] + 0.6, M().iron); for (const dx of [-1.5, 1.5]) block(q[0] + dx - 0.05, q[0] + dx + 0.05, 0, 2.4, q[1] - 0.5, q[1] - 0.4, M().iron); block(q[0] - 1.2, q[0] + 1.2, 0.4, 0.5, q[1] + 0.3, q[1] + 0.55, M().iron); }
+    { const p = A(62, 11), q = A(62, 18), im = new T.InstancedMesh(new T.CylinderGeometry(0.03, 0.03, 2.4, 5), M().iron, 60), d = new T.Object3D();
+      for (let i = 0; i < 60; i++) { d.position.set(p[0], 1.2, p[1] + (q[1] - p[1]) * i / 59); d.updateMatrix(); im.setMatrixAt(i, d.matrix); } G.scene.add(im); G.addSegCollider(p[0], p[1], q[0], q[1], 0, 2.4); }
+    for (const [c, r] of [[55, 10], [58, 20], [61, 5]]) { const q = A(c, r); pylon(q[0], q[1]); }
+    // Lieux
+    market(); terrace(); metro(); viaduct(); garage(); checkpoint(41, 9); checkpoint(42, 25);
+    bridge(4, 14, 'x', 5); bridge(28, 15, 'x', 4.5); bridge(32, 10, 'z', 5); bridge(11, 18, 'x', 6);
+    // Le corps, dans la rue du marché, côté mur
+    { const al = a[0], s = C().side(al, C().alleyLen(al) * 0.5, -3.3); G.buildBody(s[0], s[1], s[2] + 1.4); }
+    // Grille fermée au bout de l'allée nord
+    { const al = a[5], e = al.pts[al.pts.length - 1], p = al.pts[al.pts.length - 2], L = Math.hypot(e[0] - p[0], e[1] - p[1]), dx = (e[0] - p[0]) / L, dz = (e[1] - p[1]) / L; gate(e[0] - dx * 1.2, e[1] - dz * 1.2, dx, dz, al.w + 0.5); }
+    // Égout (bout de la branche nord-ouest) : plaque et cadre rouillés
+    { const q = A(3, 8); mesh(new T.CylinderGeometry(0.5, 0.5, 0.04, 16), M().iron, q[0], 0.02, q[1] + 1.2); mesh(new T.TorusGeometry(0.5, 0.04, 6, 16), M().metal, q[0], 0.04, q[1] + 1.2).rotation.x = Math.PI / 2; }
+    // La clé USB, sur une caisse dans la cour (boucle)
+    { const al2 = C().ALLEYS[2], q = C().side(al2, C().alleyLen(al2) * 0.62, al2.w - 0.75); crate(q[0], q[1], 0.9, 0.9); crate(q[0] - 1.1, q[1] + 0.4, 0.7, 0.6); barrel(q[0] + 1.4, q[1] - 0.8);
+      const usb = mesh(new T.BoxGeometry(0.05, 0.02, 0.16), new T.MeshPhongMaterial({ color: 0x8c98a4, shininess: 90, specular: 0xffffff }), q[0], 0.92, q[1]); usb.rotation.y = 0.8;
+      const glint = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xdfe8ff, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 })); glint.position.set(q[0], 1.0, q[1]); glint.scale.set(0.25, 0.25, 1); G.scene.add(glint);
+      G.animated.push({ update() { glint.material.opacity = usb.visible ? 0.14 + 0.1 * Math.sin(performance.now() / 650) : 0; } });
+      G.interactables.push({ id: 'usb', pos: new T.Vector3(q[0], 0.95, q[1]), radius: 2.0, prompt: 'Prendre la clé USB',
+        use() { usb.visible = false; G.interactables = G.interactables.filter(i => i.id !== 'usb'); G.have = G.have || []; G.have.push('usb-colis'); G.say('Une clé USB. Plus lourde qu\'elle n\'en a l\'air. Il faut la ramener au garage.'); } }); }
+    scatterBig();
+  };
+  G.helpers = { lamp, barrel, crate, barrier, block, mesh, ph, PAL, pick, toWorld };
+
+  G.loaded.push('places');
+})();
+
+</script>
+<script>
+/* ---- js/dressing.js ---- */
+/* =====================================================================
+   dressing.js : la CRASSE et les DÉTAILS qui rendent la ville vivante et malsaine (esprit Outlast).
+   Tout est posé automatiquement le long des murs et des ruelles (graine fixe : toujours pareil) :
+   - décalcomanies : traînées de sang, mains, écritures, taches d'humidité, griffures, fissures ;
+   - devantures : rideaux de fer (fermés ou à moitié), enseignes délavées, auvents ;
+   - fenêtres : silhouettes qui regardent, planches clouées ;
+   - câbles, linge, tuyaux, climatiseurs, balcons ;
+   - au sol : sacs, cartons, planches, bouteilles, gravats, papiers, flaques, sang, huile.
+   Presque tout est "instancié" (un seul dessin pour des centaines d'objets) : très léger.
+   ===================================================================== */
+(function () {
+  'use strict';
+  const G = window.G, T = G.T;
+  const C = () => G.city, M = () => G.mat, rnd = () => G.rnd(), hash = G.hash2;
+
+  // --- Texture dessinée sur un canvas (avec transparence), filtrée en douceur ---
+  function ctex(w, h, draw) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); draw(g, w, h);
+    const t = new T.CanvasTexture(c); t.magFilter = T.LinearFilter; t.minFilter = T.LinearMipmapLinearFilter; t.anisotropy = 4; return t;
+  }
+  const decalMat = (tex, o) => new T.MeshPhongMaterial(Object.assign({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, shininess: 2, specular: 0x111111 }, o || {}));
+  const blood = (a) => `rgba(${60 + Math.floor(rnd() * 30)},${6 + Math.floor(rnd() * 8)},${6},${a})`;
+
+  const TEX = {
+    smear: () => ctex(128, 256, (g, w, h) => {                                      // coulée de sang : on a glissé le long du mur
+      for (let i = 0; i < 9; i++) { const x = 20 + rnd() * 88, len = 60 + rnd() * 190, wd = 3 + rnd() * 9; const gr = g.createLinearGradient(0, 0, 0, len); gr.addColorStop(0, blood(0.0)); gr.addColorStop(0.15, blood(0.85)); gr.addColorStop(1, blood(0.95)); g.fillStyle = gr; g.fillRect(x, h - len - 6, wd, len); g.beginPath(); g.arc(x + wd / 2, h - 6, wd * 0.75, 0, 6.28); g.fill(); }
+      g.fillStyle = blood(0.8); for (let i = 0; i < 30; i++) { g.beginPath(); g.arc(20 + rnd() * 90, 20 + rnd() * 110, 1 + rnd() * 4, 0, 6.28); g.fill(); }
+    }),
+    hand: () => ctex(64, 80, (g, w, h) => {                                         // main ensanglantée, étalée
+      g.fillStyle = blood(0.85); g.beginPath(); g.ellipse(32, 52, 17, 20, 0, 0, 6.28); g.fill();
+      for (let i = 0; i < 4; i++) { g.save(); g.translate(18 + i * 9, 36); g.rotate((i - 1.5) * 0.18); g.fillRect(-3.5, -26 - (i % 3 === 1 ? 5 : 0), 7, 30); g.restore(); }
+      g.save(); g.translate(50, 58); g.rotate(0.9); g.fillRect(-4, -20, 8, 22); g.restore();
+      g.fillStyle = blood(0.7); g.fillRect(24, 68, 7, 12);
+    }),
+    stain: () => ctex(128, 128, (g) => { for (let i = 0; i < 14; i++) { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 40); gr.addColorStop(0, 'rgba(10,12,8,0.5)'); gr.addColorStop(1, 'rgba(10,12,8,0)'); g.save(); g.translate(30 + rnd() * 68, 30 + rnd() * 68); g.scale(0.6 + rnd(), 0.6 + rnd() * 1.4, 1); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 40, 0, 6.28); g.fill(); g.restore(); } }),
+    mold: () => ctex(128, 128, (g) => { for (let i = 0; i < 60; i++) { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 14); gr.addColorStop(0, 'rgba(34,46,30,0.6)'); gr.addColorStop(1, 'rgba(34,46,30,0)'); g.save(); g.translate(10 + rnd() * 108, 40 + rnd() * 80); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 4 + rnd() * 12, 0, 6.28); g.fill(); g.restore(); } }),
+    scratch: () => ctex(128, 128, (g) => { g.strokeStyle = 'rgba(190,190,180,0.55)'; g.lineWidth = 2; const x0 = 25 + rnd() * 20; for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(x0 + i * 16, 6 + rnd() * 10); g.bezierCurveTo(x0 + i * 16 + 6, 40, x0 + i * 16 - 4, 80, x0 + i * 16 + 2, 118 - rnd() * 14); g.stroke(); } }),
+    crack: () => ctex(128, 256, (g) => { g.strokeStyle = 'rgba(8,8,8,0.8)'; g.lineWidth = 2; let x = 64, y = 0; for (let b = 0; b < 4; b++) { x = 64; y = 0; g.beginPath(); g.moveTo(x, y); while (y < 250) { y += 8 + rnd() * 14; x += (rnd() - 0.5) * (b ? 36 : 22); g.lineTo(x, y); if (rnd() < 0.12 && b < 2) { g.stroke(); g.beginPath(); g.moveTo(x, y); } } g.stroke(); g.lineWidth = 1; } }),
+    window: () => ctex(64, 96, (g) => { g.fillStyle = 'rgb(70,56,34)'; g.fillRect(0, 0, 64, 96); const gr = g.createRadialGradient(32, 40, 4, 32, 40, 50); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.7)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 96); g.fillStyle = '#050505'; g.beginPath(); g.arc(32, 32, 9, 0, 6.28); g.fill(); g.fillRect(20, 42, 24, 54); }),   // une silhouette immobile derrière la vitre
+    shutter: () => ctex(64, 128, (g, w, h) => { g.fillStyle = '#3a3c3a'; g.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 6) { g.fillStyle = y % 12 ? '#2c2e2c' : '#444644'; g.fillRect(0, y, w, 3); } for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(80,50,30,${0.15 + rnd() * 0.25})`; g.fillRect(rnd() * w, rnd() * h, 2 + rnd() * 6, 8 + rnd() * 30); } }),
+    bloodpool: () => ctex(128, 128, (g) => { for (let i = 0; i < 12; i++) { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 30); gr.addColorStop(0, 'rgba(70,8,8,0.9)'); gr.addColorStop(1, 'rgba(70,8,8,0)'); g.save(); g.translate(64 + (rnd() - 0.5) * 40, 64 + (rnd() - 0.5) * 40); g.scale(0.6 + rnd() * 0.8, 0.6 + rnd() * 0.8, 1); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 30, 0, 6.28); g.fill(); g.restore(); } }),
+    drop: () => ctex(32, 32, (g) => { const gr = g.createRadialGradient(16, 16, 1, 16, 16, 14); gr.addColorStop(0, 'rgba(80,10,10,0.95)'); gr.addColorStop(1, 'rgba(80,10,10,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(16, 16, 12, 9, 0.5, 0, 6.28); g.fill(); }),
+    paper: () => ctex(32, 32, (g) => { g.fillStyle = 'rgb(138,135,124)'; g.fillRect(2, 2, 28, 28); g.fillStyle = 'rgba(40,40,40,0.5)'; for (let y = 7; y < 28; y += 5) g.fillRect(5, y, 20 + Math.random() * 4, 1); }),
+    oil: () => ctex(128, 128, (g) => { for (let i = 0; i < 8; i++) { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 36); gr.addColorStop(0, 'rgba(4,5,6,0.85)'); gr.addColorStop(1, 'rgba(4,5,6,0)'); g.save(); g.translate(64 + (rnd() - 0.5) * 40, 64 + (rnd() - 0.5) * 40); g.scale(0.7 + rnd(), 0.5 + rnd() * 0.7, 1); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 36, 0, 6.28); g.fill(); g.restore(); } }),
+  };
+  const PHRASES = ['ILS SONT LÀ', 'NE REGARDE PAS', 'ОНИ ВНУТРИ', 'НЕ ВЫХОДИ', 'ТИШЕ', 'ILS ÉCOUTENT', '13', 'PERSONNE NE SORT'];
+  function chalk(text) {                                                         // inscription à la craie, tremblante
+    return ctex(256, 64, (g, w, h) => { g.fillStyle = 'rgba(200,200,190,0.78)'; g.font = 'bold 30px "Courier New", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.save(); g.translate(w / 2, h / 2); g.rotate((rnd() - 0.5) * 0.12); g.fillText(text, 0, 0); g.restore(); for (let i = 0; i < 160; i++) { g.clearRect(rnd() * w, rnd() * h, 1 + rnd() * 3, 1 + rnd() * 3); } });
+  }
+  const SIGNS = [['PHARMACIE', '#4d6a4f'], ['TABAC', '#6b3a32'], ['БАР', '#3f5a68'], ['БОУЧЕРИ', '#5a4a3a'], ['HÔTEL', '#55504a'], ['РЕМОНТ', '#4a4a52'], ['FRITES', '#6a5a30'], ['24H', '#3a5048'], ['АПТЕКА', '#455c45'], ['COIFFEUR', '#5a4552']];
+  function signTex(text, bg) {
+    return ctex(256, 64, (g, w, h) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 0, w, 6); g.fillRect(0, h - 6, w, 6);
+      g.fillStyle = 'rgba(225,220,200,0.82)'; g.font = 'bold 34px "Arial Black", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w / 2, h / 2 + 1);
+      for (let i = 0; i < 200; i++) { g.fillStyle = `rgba(0,0,0,${0.1 + rnd() * 0.3})`; g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 5, 1 + rnd() * 3); } g.fillStyle = 'rgba(70,40,25,0.4)'; for (let i = 0; i < 6; i++) g.fillRect(rnd() * w, 0, 3, 20 + rnd() * 40); });
+  }
+
+  // Une liste de plans collés (mur ou sol) en un seul objet instancié
+  const dummy = new T.Object3D(), PLANE = new T.PlaneGeometry(1, 1);
+  function decals(tex, list, o) {                // list : [x,y,z,yaw,sx,sy,(roll)]
+    if (!list.length) return;
+    const im = new T.InstancedMesh(PLANE, decalMat(tex, o), list.length);
+    list.forEach((s, i) => { dummy.position.set(s[0], s[1], s[2]); dummy.rotation.set(s.ground ? -Math.PI / 2 : 0, s.ground ? 0 : s[3], s.ground ? s[3] : (s[6] || 0)); dummy.scale.set(s[4], s[5], 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
+    G.scene.add(im);
+  }
+  const ground = (x, z, ang, sx, sy) => { const a = [x, 0.025 + rnd() * 0.01, z, ang, sx, sy]; a.ground = true; return a; };
+
+  /* ---------- 1. Murs : sang, mains, écritures, humidité, griffures, fissures ---------- */
+  function wallDecals(walls) {
+    const L = { smear: [], hand: [], stain: [], mold: [], scratch: [], crack: [] }, writing = [];
+    for (const w of walls) {
+      if (Math.abs(w.mx) < 6 && w.mz > -9) continue;                                // la sortie de la tour reste propre : début calme
+      const r = hash(w.mx * 0.91, w.mz * 1.3), yaw = Math.atan2(w.nx, w.nz), p = (o) => [w.mx + w.nx * 0.035, 0, w.mz + w.nz * 0.035, yaw];
+      const at = (y, sx, sy) => { const q = p(); q[1] = y; q.push(sx * (rnd() < 0.5 ? -1 : 1), sy); return q; };
+      if (r < 0.016) L.smear.push(at(0.9 + rnd() * 0.3, 0.9, 1.8));
+      else if (r < 0.030) { for (let i = 0; i < 2 + Math.floor(rnd() * 3); i++) { const q = at(1.0 + rnd() * 0.7 + i * 0.08, 0.34, 0.42); q[0] += -w.nz * (i - 1) * 0.3; q[2] += w.nx * (i - 1) * 0.3; L.hand.push(q); } }
+      else if (r < 0.075) L.stain.push(at(0.6 + rnd() * 2.2, 1.6 + rnd() * 1.4, 1.6 + rnd() * 1.8));
+      else if (r < 0.105) L.mold.push(at(0.5 + rnd() * 0.8, 1.4 + rnd(), 1.4 + rnd()));
+      else if (r < 0.118) L.scratch.push(at(1.3 + rnd() * 0.5, 0.8, 0.8));
+      else if (r < 0.128) { const q = at(1.3 + rnd() * 0.5, 1.8, 0.45); writing.push([q, pick(PHRASES)]); }
+      else if (r < 0.145) L.crack.push(at(2.2 + rnd() * 1.5, 1.1, 2.2));
+    }
+    decals(TEX.smear(), L.smear, { shininess: 25, specular: 0x331111 }); decals(TEX.hand(), L.hand, { shininess: 25, specular: 0x331111 }); decals(TEX.stain(), L.stain);
+    decals(TEX.mold(), L.mold); decals(TEX.scratch(), L.scratch); decals(TEX.crack(), L.crack);
+    for (const [q, text] of writing) { const m = new T.Mesh(PLANE, decalMat(chalk(text))); m.position.set(q[0], q[1], q[2]); m.rotation.y = q[3]; m.scale.set(Math.abs(q[4]), q[5], 1); G.scene.add(m); }
+  }
+  function pick(a) { return a[Math.floor(rnd() * a.length)]; }
+
+  /* ---------- 2. Devantures : rideaux de fer, enseignes, auvents ---------- */
+  function shopfronts(walls) {
+    const used = new Set(), shutC = [], shutH = [], doorD = [], awn = [], signs = [];
+    for (const w of walls) {
+      if (w.len < 0.5 || (Math.abs(w.mx) < 6 && w.mz > -9)) continue;
+      const key = Math.floor(w.mx / 3.6) * 4096 + Math.floor(w.mz / 3.6); if (used.has(key) || hash(w.mx * 2.1, w.mz * 1.7) < 0.80) continue; used.add(key);
+      const yaw = Math.atan2(w.nx, w.nz), ox = w.mx + w.nx * 0.07, oz = w.mz + w.nz * 0.07, half = rnd() < 0.3;
+      (half ? shutH : shutC).push([ox, half ? 1.75 : 1.15, oz, yaw]); if (half) doorD.push([ox + w.nx * 0.01, 0.7, oz + w.nz * 0.01, yaw]);
+      signs.push([w.mx + w.nx * 0.08, 2.85, w.mz + w.nz * 0.08, yaw]);
+      if (rnd() < 0.4) awn.push([w.mx + w.nx * 0.65, 2.55, w.mz + w.nz * 0.65, yaw]);
+    }
+    const inst = (geo, mat, list, sc, tilt, colors) => { if (!list.length) return; const im = new T.InstancedMesh(geo, mat, list.length), col = new T.Color();
+      list.forEach((s, i) => { dummy.position.set(s[0], s[1], s[2]); dummy.rotation.order = 'YXZ'; dummy.rotation.set(tilt || 0, s[3], 0); dummy.scale.set(sc[0], sc[1], sc[2]); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); if (colors) im.setColorAt(i, col.set(colors[Math.floor(rnd() * colors.length)])); }); G.scene.add(im); dummy.rotation.order = 'XYZ'; };
+    const box = new T.BoxGeometry(1, 1, 1), shutMat = new T.MeshPhongMaterial({ map: TEX.shutter(), shininess: 8, specular: 0x222222 });
+    inst(box, shutMat, shutC, [2.8, 2.3, 0.08]); inst(box, shutMat, shutH, [2.8, 1.0, 0.08]); inst(box, M().dark, doorD, [2.7, 1.4, 0.05]);
+    inst(box, new T.MeshPhongMaterial({ color: 0xffffff, shininess: 2, side: T.DoubleSide }), awn, [3.0, 0.05, 1.3], 0.38, [0x3b4038, 0x4a4540, 0x2f3a3c, 0x4b3f38, 0x55453a]);
+    signs.forEach(s => { const [t, bg] = SIGNS[Math.floor(rnd() * SIGNS.length)], m = new T.Mesh(new T.BoxGeometry(2.8, 0.6, 0.1), new T.MeshPhongMaterial({ map: signTex(t, bg), shininess: 4 })); m.position.set(s[0], s[1], s[2]); m.rotation.y = s[3]; G.scene.add(m); });
+  }
+
+  /* ---------- 3. Fenêtres : silhouettes qui regardent, planches ---------- */
+  function windows(walls) {
+    const sil = [], boards = [];
+    for (const w of walls) {
+      if (hash(w.mx * 0.37, w.mz * 0.53) <= 0.80) continue;                       // mêmes emplacements que les fentes de city.js
+      for (const y of [3.2, 6.4, 9.6]) {
+        if (y + 1 >= w.h) continue; const q = hash(w.mx + y, w.mz), yaw = Math.atan2(w.nx, w.nz);
+        if (q > 0.93 && q < 0.96) sil.push([w.mx + w.nx * 0.1, y, w.mz + w.nz * 0.1, yaw, 0.9, 1.35]);
+        else if (q > 0.80 && q < 0.86) boards.push([w.mx + w.nx * 0.12, y, w.mz + w.nz * 0.12, yaw]);
+      }
+    }
+    decals(TEX.window(), sil, { polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+    if (boards.length) { const im = new T.InstancedMesh(new T.BoxGeometry(1.4, 0.12, 0.04), M().wood, boards.length * 2); let k = 0;
+      for (const s of boards) for (const a of [0.45, -0.38]) { dummy.position.set(s[0], s[1], s[2]); dummy.rotation.set(0, s[3], a + (rnd() - 0.5) * 0.15); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); im.setMatrixAt(k++, dummy.matrix); } G.scene.add(im); }
+  }
+
+  /* ---------- 4. En hauteur : tuyaux, climatiseurs, balcons ---------- */
+  function wallStuff(walls) {
+    const ac = [], pipe = [], balc = [];
+    for (const w of walls) {
+      const r = hash(w.mx * 0.57, w.mz * 0.43), yaw = Math.atan2(w.nx, w.nz);
+      if (r > 0.5 && r < 0.525) ac.push([w.mx + w.nx * 0.2, 4 + rnd() * 5, w.mz + w.nz * 0.2, yaw]);
+      else if (r > 0.7 && r < 0.714) balc.push([w.mx + w.nx * 0.5, 5.5 + Math.floor(rnd() * 2) * 3, w.mz + w.nz * 0.5, yaw]);
+      if (hash(Math.floor(w.mx / 9), Math.floor(w.mz / 9)) > 0.62 && w.len > 0.4) pipe.push([w.mx + w.nx * 0.08, 2.1 + 0.5 * hash(Math.floor(w.mx / 9), 1), w.mz + w.nz * 0.08, w.nx, w.nz, w.len]);
+    }
+    const inst = (geo, mat, list, sc) => { if (!list.length) return; const im = new T.InstancedMesh(geo, mat, list.length); list.forEach((s, i) => { dummy.position.set(s[0], s[1], s[2]); dummy.rotation.set(0, s[3], 0); dummy.scale.set(sc[0], sc[1], sc[2]); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); }); G.scene.add(im); };
+    inst(new T.BoxGeometry(1, 1, 1), M().plastic, ac, [0.75, 0.5, 0.4]);
+    inst(new T.BoxGeometry(1, 1, 1), M().concreteDark, balc, [2.0, 0.12, 1.0]);
+    if (pipe.length) { const im = new T.InstancedMesh(new T.CylinderGeometry(0.045, 0.045, 1, 6), M().metal, pipe.length), up = new T.Vector3(0, 1, 0), q = new T.Quaternion();
+      pipe.forEach((s, i) => { dummy.position.set(s[0], s[1], s[2]); q.setFromUnitVectors(up, new T.Vector3(-s[4], 0, s[3])); dummy.quaternion.copy(q); dummy.scale.set(1, s[5] * 1.05, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); dummy.quaternion.identity(); }); G.scene.add(im); }
+  }
+
+  /* ---------- 5. Câbles qui pendent, linge, fils coupés ---------- */
+  function cables() {
+    const rags = [];
+    C().ALLEYS.forEach((a, k) => {
+      if (k === 8) return; const L = C().alleyLen(a);
+      for (let d = 4; d < L - 2; d += 5.5 + rnd() * 3) {
+        const p = C().alleyPoint(a, d), w = a.w + 0.5, y = 4.5 + rnd() * 4.5, dy = (rnd() - 0.5) * 1.5, sag = 0.4 + rnd() * 0.7;
+        const A0 = [p.x + p.dz * w, y, p.z - p.dx * w], B0 = [p.x - p.dz * w, y + dy, p.z + p.dx * w], Mi = [(A0[0] + B0[0]) / 2 + p.dx * (rnd() - 0.5) * 2, (A0[1] + B0[1]) / 2 - sag, (A0[2] + B0[2]) / 2 + p.dz * (rnd() - 0.5) * 2];
+        const cut = rnd() < 0.12;                                                // fil coupé : il pend au milieu
+        const pts = cut ? [A0, [A0[0] * 0.8 + Mi[0] * 0.2, A0[1] - 0.6, A0[2] * 0.8 + Mi[2] * 0.2], [A0[0] * 0.6 + Mi[0] * 0.4, A0[1] - 2.2, A0[2] * 0.6 + Mi[2] * 0.4]] : [A0, [(A0[0] + Mi[0]) / 2, (A0[1] + Mi[1]) / 2 - 0.1, (A0[2] + Mi[2]) / 2], Mi, [(B0[0] + Mi[0]) / 2, (B0[1] + Mi[1]) / 2 - 0.1, (B0[2] + Mi[2]) / 2], B0];
+        const tube = new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts.map(q => new T.Vector3(...q))), 10, rnd() < 0.2 ? 0.03 : 0.016, 3, false), M().iron); G.scene.add(tube);
+        if (!cut && rnd() < 0.28) for (let i = 0; i < 3; i++) rags.push([Mi[0] + p.dx * (i - 1) * 0.5 + (rnd() - 0.5) * 0.3, Mi[1] - 0.45, Mi[2] + p.dz * (i - 1) * 0.5 + (rnd() - 0.5) * 0.3, Math.atan2(p.dx, p.dz) + (rnd() - 0.5) * 0.8]);
+      }
+    });
+    if (rags.length) { const im = new T.InstancedMesh(PLANE, new T.MeshPhongMaterial({ color: 0xffffff, side: T.DoubleSide, shininess: 1 }), rags.length), col = new T.Color();
+      rags.forEach((s, i) => { dummy.position.set(s[0], s[1], s[2]); dummy.rotation.set(0, s[3], 0); dummy.scale.set(0.45 + rnd() * 0.3, 0.7 + rnd() * 0.4, 1); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, col.setHex([0x3d3f3c, 0x4a4540, 0x35393b, 0x544c42][Math.floor(rnd() * 4)])); }); G.scene.add(im); }
+  }
+
+  /* ---------- 6. Au sol : débris, flaques, sang, huile ---------- */
+  function clutter() {
+    const bag = [], card = [], plank = [], bottle = [], rubble = [], gnd = { pool: [], drop: [], oil: [], paper: [] }, push = (list, x, z, y, sc) => list.push([x, y, z, rnd() * 6.28, sc]);
+    const scatter = (cx, cz, rx, rz, n, ellipse) => { for (let i = 0; i < n; i++) { let x, z; do { x = (rnd() * 2 - 1) * rx; z = (rnd() * 2 - 1) * rz; } while (ellipse && x * x / (rx * rx) + z * z / (rz * rz) > 1); drop(cx + x, cz + z); } };
+    const drop = (x, z) => { const r = rnd();
+      if (r < 0.2) push(bag, x, z, 0.18, 0.7 + rnd() * 0.7); else if (r < 0.32) push(card, x, z, 0.15, 0.6 + rnd() * 0.7); else if (r < 0.42) push(plank, x, z, 0.04, 0.6 + rnd() * 0.8);
+      else if (r < 0.52) push(bottle, x, z, 0.04, 1); else if (r < 0.66) { for (let i = 0; i < 4; i++) push(rubble, x + (rnd() - 0.5) * 0.6, z + (rnd() - 0.5) * 0.6, 0.1, 0.5 + rnd() * 1.1); }
+      else if (r < 0.8) gnd.paper.push(ground(x, z, rnd() * 6.28, 0.2 + rnd() * 0.1, 0.28 + rnd() * 0.1)); else if (r < 0.9) gnd.pool.push(ground(x, z, rnd() * 6.28, 0.9 + rnd() * 1.4, 0.7 + rnd() * 0.9)); else if (r < 0.95) gnd.oil.push(ground(x, z, rnd() * 6.28, 1 + rnd(), 1 + rnd())); else gnd.drop.push(ground(x, z, rnd() * 6.28, 0.25 + rnd() * 0.3, 0.2 + rnd() * 0.25)); };
+    C().ALLEYS.forEach((a, k) => { const L = C().alleyLen(a); for (let d = 3; d < L; d += 0.9) { const p = C().alleyPoint(a, d), off = (rnd() * 2 - 1) * (a.w - 0.4), x = p.x - p.dz * off, z = p.z + p.dx * off; if (Math.abs(x) < 7 && z > -9) continue; if (rnd() < (k === 0 ? 0.55 : 0.8)) drop(x, z); } });
+    const pl = C().PLACE; scatter(pl.c[0], pl.c[1], pl.rx, pl.rz, 130, true); const t = C().TERRACE; scatter(t.c[0], t.c[1], t.hx, t.hz, 50, false);
+    // Traînées de sang : des gouttes qui mènent quelque part
+    const trail = (k, d0, d1, off) => { const a = C().ALLEYS[k]; for (let d = d0; d < d1; d += 0.5 + rnd() * 0.4) { const p = C().alleyPoint(a, d), o = off + (rnd() - 0.5) * 0.5; gnd.drop.push(ground(p.x - p.dz * o, p.z + p.dx * o, rnd() * 6.28, 0.22 + rnd() * 0.3, 0.18 + rnd() * 0.2)); } const e = C().alleyPoint(a, d1), s = ground(e.x - e.dz * off, e.z + e.dx * off, rnd() * 6.28, 1.8, 1.4); gnd.pool.push(s); };
+    trail(1, 2, 18, 0.3); trail(0, 22, 40, -1.2); trail(4, 8, 28, 0.5); trail(5, 4, 20, -0.4);
+    // Instanciation
+    const inst = (geo, mat, list, colors, scaleFn) => { if (!list.length) return; const im = new T.InstancedMesh(geo, mat, list.length), c = new T.Color();
+      list.forEach((s, i) => { dummy.position.set(s[0], s[1], s[2]); dummy.rotation.set(0, s[3], 0); const sc = scaleFn(s); dummy.scale.set(sc[0], sc[1], sc[2]); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); if (colors) im.setColorAt(i, c.setHex(colors[Math.floor(rnd() * colors.length)])); }); G.scene.add(im); };
+    const mat = (s) => new T.MeshPhongMaterial({ color: 0xffffff, shininess: s || 4 });
+    inst(new T.SphereGeometry(0.28, 8, 6), mat(30), bag, [0x0b0d0b, 0x151815, 0x1c1c1a], s => [s[4], s[4] * 0.7, s[4]]);
+    inst(new T.BoxGeometry(0.5, 0.32, 0.4), mat(1), card, [0x5a4a35, 0x4a3f30, 0x3b342b], s => [s[4], s[4], s[4]]);
+    inst(new T.BoxGeometry(1.2, 0.05, 0.12), mat(1), plank, [0x4a3f30, 0x3a3328], s => [s[4], 1, 1]);
+    const bt = new T.CylinderGeometry(0.04, 0.04, 0.25, 6); bt.rotateZ(Math.PI / 2); inst(bt, mat(60), bottle, [0x2a3a2a, 0x3a3a2a], () => [1, 1, 1]);
+    inst(new T.BoxGeometry(0.3, 0.2, 0.25), mat(1), rubble, [0x555855, 0x484b49, 0x3c403e], s => [s[4], s[4], s[4]]);
+    decals(TEX.paper(), gnd.paper, { polygonOffsetFactor: -3 });
+    decals(TEX.bloodpool(), gnd.pool, { shininess: 40, specular: 0x441111, polygonOffsetFactor: -3 }); decals(TEX.drop(), gnd.drop, { shininess: 40, specular: 0x441111, polygonOffsetFactor: -3 }); decals(TEX.oil(), gnd.oil, { shininess: 90, specular: 0x667788, polygonOffsetFactor: -3 });
+  }
+
+  /* ---------- 7. Quelques enseignes à néon, très faibles (vert malade, rose éteint, ambre) ---------- */
+  function neons(walls) {
+    const a = C().ALLEYS[0], L = C().alleyLen(a), pts = []; for (let d = 8; d < L; d += 3) { const p = C().alleyPoint(a, d); pts.push([p.x, p.z]); }
+    const list = [['ТАБАК', 0x3dff7a], ['HÔTEL', 0xff2a6d], ['БАР', 0x05d9e8], ['24H', 0xffb347], ['ЧАЙ', 0x3dff7a], ['РЕМОНТ', 0xffb347], ['BAR', 0xff2a6d]];
+    let n = 0;
+    for (const w of walls) { if (n >= list.length) break; if (hash(w.mx * 1.3, w.mz * 0.7) < 0.97 || w.len < 0.5) continue;
+      if (!pts.some(q => Math.hypot(q[0] - w.mx, q[1] - w.mz) < 7)) continue;
+      const [t, col] = list[n++], yaw = Math.atan2(w.nx, w.nz), c = document.createElement('canvas'); c.width = 128; c.height = 40; const g = c.getContext('2d');
+      g.fillStyle = '#0a0a0c'; g.fillRect(0, 0, 128, 40); g.strokeStyle = '#' + col.toString(16).padStart(6, '0'); g.lineWidth = 2; g.strokeRect(2, 2, 124, 36); g.fillStyle = g.strokeStyle; g.font = 'bold 22px "DejaVu Sans", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, 64, 21);
+      const tx = new T.CanvasTexture(c), m = new T.Mesh(new T.PlaneGeometry(1.5, 0.47), new T.MeshBasicMaterial({ map: tx, color: 0x777777 })); m.position.set(w.mx + w.nx * 0.12, 3.8 + rnd(), w.mz + w.nz * 0.12); m.rotation.y = yaw; G.scene.add(m);
+      G.addLamp({ x: w.mx + w.nx * 0.8, y: m.position.y, z: w.mz + w.nz * 0.8, color: col, I: 0.5, dist: 7, halo: 1.6, flicker: 0.8 }); }
+  }
+
+  G.buildDressing = function (walls) {
+    wallDecals(walls); shopfronts(walls); windows(walls); wallStuff(walls); cables(); clutter(); neons(walls);
+  };
+
+  G.loaded.push('dressing');
+})();
+
+</script>
+<script>
+/* ---- js/cops.js ---- */
+/* =====================================================================
+   cops.js : les POLICIERS. Version 1 : vision, alerte progressive, poursuite, arrestation.
+   - Ils VOIENT dans un cône (≈ 110°) jusqu'à ~20 m, si rien ne bouche la vue. Accroupi : on est moins visible ; en courant : plus.
+   - Ils ENTENDENT : course, glissade et dash font du bruit ; marcher à peine ; accroupi presque rien.
+   - L'ALERTE monte progressivement tant qu'ils te voient (plus vite de près), redescend sinon :
+       idle (garde/patrouille) -> suspicious (ils s'approchent de ce qu'ils ont vu/entendu) -> chase (ils courent) -> search (ils fouillent) -> idle
+   - Ils suivent les ruelles (A* sur un graphe de points le long des ruelles) et enjambent les obstacles bas (<= 1,1 m).
+     Ils NE savent PAS grimper plus haut : passerelles, toits, terrasse et sauts de mur sont des échappatoires.
+   - Au contact pendant une poursuite : arrestation (fondu au noir) et retour devant la tour.
+   Deux gardes à chaque barrage, deux patrouilleurs (rue du marché, place). Vitesses : patrouille 1,4 · enquête 2,4 · poursuite 6,0 m/s.
+   ===================================================================== */
+(function () {
+  'use strict';
+  const G = window.G, T = G.T;
+  const R = 0.4, STEP = 1.1, SPEED = { patrol: 1.4, investigate: 2.4, chase: 6.0, search: 2.2 };
+  const cops = G.cops = []; G.alert = 0; G.frozen = false; G.arrest = null;
+  let nodes = [], adj = [];
+  const snd = (n, a, b) => { const f = G.audio && G.audio[n]; if (f) f(a, b); };
+
+  // Ligne de vue : on avance par petits pas entre deux points ; un obstacle à hauteur des yeux la coupe
+  G.los = function (x0, y0, z0, x1, y1, z1) {
+    const d = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(d / 0.6));
+    for (let i = 1; i < n; i++) { const t = i / n; if (G.blocked(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, y0 + (y1 - y0) * t - 0.15, 0.3, 0.05)) return false; }
+    return true;
+  };
+
+  /* ---------- Graphe de navigation le long des ruelles ---------- */
+  function buildNav() {
+    nodes = []; const own = [];
+    G.city.ALLEYS.forEach((a, k) => {
+      const L = G.city.alleyLen(a), ids = [];
+      for (let d = 0; d <= L + 0.01; d += 5) { const p = G.city.alleyPoint(a, Math.min(d, L)); nodes.push({ x: p.x, z: p.z, k }); ids.push(nodes.length - 1); }
+      own.push(ids);
+    });
+    adj = nodes.map(() => []);
+    const link = (i, j) => { if (!adj[i].includes(j)) { adj[i].push(j); adj[j].push(i); } };
+    own.forEach(ids => { for (let i = 0; i < ids.length - 1; i++) link(ids[i], ids[i + 1]); });
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) if (nodes[i].k !== nodes[j].k && Math.hypot(nodes[i].x - nodes[j].x, nodes[i].z - nodes[j].z) < 9) link(i, j);
+  }
+  function nearestNode(x, z) {
+    let best = -1, bd = 1e9;
+    for (let i = 0; i < nodes.length; i++) { const d = Math.hypot(nodes[i].x - x, nodes[i].z - z); if (d < bd && (d < 3 || G.los(x, 1, z, nodes[i].x, 1, nodes[i].z))) { bd = d; best = i; } }
+    if (best < 0) for (let i = 0; i < nodes.length; i++) { const d = Math.hypot(nodes[i].x - x, nodes[i].z - z); if (d < bd) { bd = d; best = i; } }
+    return best;
+  }
+  function astar(a, b) {                                               // chemin le plus court entre deux nœuds
+    const g = new Map([[a, 0]]), prev = new Map(), open = [a], h = i => Math.hypot(nodes[i].x - nodes[b].x, nodes[i].z - nodes[b].z), done = new Set();
+    while (open.length) {
+      let bi = 0; for (let i = 1; i < open.length; i++) if (g.get(open[i]) + h(open[i]) < g.get(open[bi]) + h(open[bi])) bi = i;
+      const cur = open.splice(bi, 1)[0]; if (cur === b) break; done.add(cur);
+      for (const nx of adj[cur]) { if (done.has(nx)) continue; const ng = g.get(cur) + Math.hypot(nodes[cur].x - nodes[nx].x, nodes[cur].z - nodes[nx].z); if (!g.has(nx) || ng < g.get(nx)) { g.set(nx, ng); prev.set(nx, cur); if (!open.includes(nx)) open.push(nx); } }
+    }
+    const path = []; let n = b; if (!prev.has(b) && a !== b) return path; while (n !== undefined) { path.unshift([nodes[n].x, nodes[n].z]); n = prev.get(n); } return path;
+  }
+
+  /* ---------- Un policier ---------- */
+  function addCop(group, home, facing, patrol) {
+    const c = { g: group, x: home[0], z: home[1], y: 0, facing, home: home.slice(), homeFacing: facing, patrol: patrol || null, pi: 0, state: 'idle', alert: 0, last: null, lostT: 0, searchT: 0,
+      path: [], pathT: 0, speed: 0, phase: 0, v: new T.Vector3(), stuckT: 0, lx: home[0], lz: home[1], wait: 0 };
+    G.scene.add(group); cops.push(c); return c;
+  }
+  function eyePos() { const P = G.P; return [P.pos.x, P.pos.y + 1.2, P.pos.z]; }
+
+  function perceive(c, dt) {
+    const P = G.P, dx = P.pos.x - c.x, dz = P.pos.z - c.z, dist = Math.hypot(dx, dz);
+    let range = 20 * (P.h < 1.5 && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1);
+    const dot = dist > 0.01 ? (dx * Math.sin(c.facing) + dz * Math.cos(c.facing)) / dist : 1;
+    const e = eyePos();
+    const sees = !G.arrest && dist < range && (dist < 3 || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]);
+    const noise = P.mode === 'slide' || P.dashT > 0 ? 12 : P.sprint ? 8 : P.mode === 'wallrun' ? 9 : (P.speed > 1 && P.h > 1.5) ? 3 : 1;
+    const hears = !G.arrest && !sees && dist < noise && Math.abs(P.pos.y - c.y) < 3;
+    if (sees) { c.alert = Math.min(1.5, c.alert + dt * (0.9 + (1 - dist / range) * 1.6)); c.last = [P.pos.x, P.pos.z]; c.lostT = 0; }
+    else if (hears) { c.alert = Math.min(1.5, c.alert + dt * 0.55); c.last = [P.pos.x + (Math.random() - 0.5) * 3, P.pos.z + (Math.random() - 0.5) * 3]; }
+    else if (c.state !== 'chase') c.alert = Math.max(0, c.alert - dt * 0.18);
+    return { sees, dist };
+  }
+
+  // Avance vers (tx, tz) : en ligne droite si la voie est libre, sinon le long du graphe des ruelles
+  function steer(c, tx, tz, speed, dt, force) {
+    const dist = Math.hypot(tx - c.x, tz - c.z); let gx = tx, gz = tz;
+    const direct = dist < 14 && G.los(c.x, c.y + 1, c.z, tx, c.y + 1, tz);
+    if (!direct) {
+      c.pathT -= dt;
+      if (c.pathT <= 0 || force) { c.pathT = 0.7; const a = nearestNode(c.x, c.z), b = nearestNode(tx, tz); c.path = a >= 0 && b >= 0 ? astar(a, b) : []; c.path.push([tx, tz]); }
+      while (c.path.length > 1 && Math.hypot(c.path[0][0] - c.x, c.path[0][1] - c.z) < 1.6) c.path.shift();
+      if (c.path.length) { gx = c.path[0][0]; gz = c.path[0][1]; }
+    }
+    const d = Math.hypot(gx - c.x, gz - c.z) || 1, ux = (gx - c.x) / d, uz = (gz - c.z) / d;
+    c.speed += (speed - c.speed) * Math.min(1, dt * 5);
+    const target = Math.atan2(ux, uz); let da = target - c.facing; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283; c.facing += da * Math.min(1, dt * 8);
+    const stepLen = c.speed * dt, n = Math.max(1, Math.ceil(stepLen / 0.2));
+    c.v.set(c.x, c.y, c.z);
+    for (let i = 0; i < n; i++) { c.v.x += ux * stepLen / n; c.v.z += uz * stepLen / n; G.pushOut(c.v, c.y, 1.8, R, STEP); c.y = G.groundAt(c.v.x, c.v.z, c.y, R * 0.9, STEP); }
+    // Bloqué ? (coincé contre un obstacle) : on change de chemin
+    c.x = c.v.x; c.z = c.v.z; c.stuckT += dt; if (c.stuckT > 1) { if (Math.hypot(c.x - c.lx, c.z - c.lz) < 0.3 && speed > 1) { c.pathT = 0; c.path = []; c.x += (Math.random() - 0.5) * 0.6; c.z += (Math.random() - 0.5) * 0.6; } c.lx = c.x; c.lz = c.z; c.stuckT = 0; }
+    return dist;
+  }
+  function face(c, tx, tz, dt, rate) { const target = Math.atan2(tx - c.x, tz - c.z); let da = target - c.facing; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283; c.facing += da * Math.min(1, dt * (rate || 4)); c.speed += (0 - c.speed) * Math.min(1, dt * 6); }
+
+  function think(c, dt) {
+    const pc = perceive(c, dt);
+    switch (c.state) {
+      case 'idle':
+        if (c.alert >= 0.35) { c.state = 'suspicious'; break; }
+        if (c.patrol) {                                                      // patrouille : de point en point, avec une petite pause
+          if (c.wait > 0) { c.wait -= dt; face(c, c.x + Math.sin(c.facing), c.z + Math.cos(c.facing), dt); }
+          else { const p = c.patrol[c.pi]; if (steer(c, p[0], p[1], SPEED.patrol, dt) < 1.5) { c.pi = (c.pi + 1) % c.patrol.length; c.wait = 1 + Math.random() * 2.5; } }
+        } else {                                                              // garde : immobile, regarde de gauche à droite
+          const d = Math.hypot(c.home[0] - c.x, c.home[1] - c.z);
+          if (d > 1) steer(c, c.home[0], c.home[1], SPEED.investigate, dt); else { c.speed *= 0.9; c.facing += (c.homeFacing + Math.sin(performance.now() / 2200 + c.home[1]) * 0.7 - c.facing) * Math.min(1, dt * 2); }
+        }
+        break;
+      case 'suspicious':
+        if (c.alert >= 1) { c.state = 'chase'; snd('fx', 'cop_alert', 1); G.say && G.say('« Hé ! Toi ! Ne bouge pas ! »', 2500); break; }
+        if (c.alert < 0.12) { c.state = 'idle'; break; }
+        if (c.last) { if (Math.hypot(c.last[0] - c.x, c.last[1] - c.z) > 2.5) steer(c, c.last[0], c.last[1], SPEED.investigate, dt); else face(c, c.last[0], c.last[1], dt, 3); }
+        break;
+      case 'chase': {
+        const P = G.P; if (pc.sees) c.lostT = 0; else c.lostT += dt;
+        const tx = pc.sees ? P.pos.x : (c.last ? c.last[0] : P.pos.x), tz = pc.sees ? P.pos.z : (c.last ? c.last[1] : P.pos.z);
+        const d = steer(c, tx, tz, SPEED.chase * (G.P.stunT > 0 ? 1 : 1), dt);
+        if (pc.dist < 1.3 && Math.abs(P.pos.y - c.y) < 1.7 && pc.sees) arrest(c);
+        if (c.lostT > 20 || (d < 2.5 && !pc.sees)) { c.state = 'search'; c.searchT = 6; }                  // il court jusqu'à l'endroit où il t'a vu, puis il fouille
+        break; }
+      case 'search':
+        c.searchT -= dt; if (c.last && Math.hypot(c.last[0] - c.x, c.last[1] - c.z) > 2) steer(c, c.last[0], c.last[1], SPEED.search, dt); else { c.facing += dt * 1.4; c.speed *= 0.9; }
+        if (c.alert >= 1) c.state = 'chase';
+        if (c.searchT <= 0) { c.state = 'idle'; c.alert = 0; }
+        break;
+    }
+  }
+  function animate(c, dt) {
+    const parts = c.g.userData.parts, chase = c.state === 'chase';
+    c.phase += c.speed * dt * (chase ? 1.5 : 2.0);
+    const sw = Math.min(1, c.speed / 3) * (chase ? 0.9 : 0.55), s = Math.sin(c.phase);
+    parts.leg1.rotation.x = s * sw; parts['leg-1'].rotation.x = -s * sw;                  // les jambes et les bras se balancent en opposition
+    parts.arm1.rotation.x = -s * sw * 0.8; parts['arm-1'].rotation.x = s * sw * 0.8;
+    c.g.position.set(c.x, c.y + Math.abs(s) * 0.03 * Math.min(1, c.speed / 3), c.z); c.g.rotation.y = c.facing; c.g.rotation.x = chase ? 0.14 : 0;
+    parts.head.rotation.y = c.state === 'suspicious' ? Math.sin(performance.now() / 500) * 0.5 : 0;
+  }
+
+  function arrest(c) {
+    if (G.arrest) return;
+    G.arrest = { t: 0 }; G.frozen = true; const P = G.P; P.vx = P.vz = 0;
+    snd('fx', 'arrest', 1); G.say && G.say('Arrêté.', 3000);
+    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.9s'; f.style.opacity = 1; }
+  }
+  function respawn() {
+    const P = G.P; P.pos.set(0, 0, -6); P.yaw = 0; P.pitch = 0; P.vx = P.vy = P.vz = 0; P.mode = 'move'; P.anim = null; P.onGround = true; P.h = 1.75; P.stunT = 0; P.eye = 1.62; P.safe.set(0, 0, -6);
+    for (const c of cops) { c.x = c.home[0]; c.z = c.home[1]; c.y = 0; c.state = 'idle'; c.alert = 0; c.last = null; c.path = []; c.facing = c.homeFacing; c.speed = 0; }
+    G.alert = 0; G.arrest = null; G.frozen = false;
+    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 2.5s'; f.style.opacity = 0; }
+    G.say && G.say('Ils t\'ont relâché. Pour cette fois.', 4500);
+  }
+
+  G.updateCops = function (dt) {
+    if (G.arrest) { G.arrest.t += dt; if (G.arrest.t > 2.3) respawn(); }
+    let top = 0;
+    for (const c of cops) { think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
+    G.alert += (top - G.alert) * Math.min(1, dt * 3);
+  };
+
+  G.initCops = function () {
+    buildNav();
+    for (const k of G.checkpoints) addCop(k.cop, k.home, -Math.PI / 2 + 0.0, null);                    // les gardes des barrages regardent vers la ville
+    const a0 = G.city.ALLEYS[0], L = G.city.alleyLen(a0), line = [];
+    for (const d of [L * 0.3, L * 0.55, L * 0.8, L * 0.55]) { const p = G.city.alleyPoint(a0, d); line.push([p.x, p.z]); }
+    { const g = G.makeCop(); addCop(g, line[2], 0, line); }                                                // patrouilleur de la rue du marché
+    const pl = G.city.PLACE, ring = []; for (let i = 0; i < 8; i++) { const t = i / 8 * 6.283; ring.push([pl.c[0] + Math.cos(t) * pl.rx * 0.45, pl.c[1] + Math.sin(t) * pl.rz * 0.45]); }
+    { const g = G.makeCop(); addCop(g, ring[0], 0, ring); }                                                // patrouilleur de la place
+  };
+
+  G.loaded.push('cops');
 })();
 
 </script>
@@ -1154,7 +1693,7 @@
       let i = flags.indexOf(true), edge = -1; if (i >= 0) for (; i < flags.length; i++) if (!flags[i]) { edge = i; break; }
       if (edge >= 0) {
         const s = 0.1 + edge * 0.15 + 0.5, lx = x + dx * (d0 + s), lz = z + dz * (d0 + s), gy = G.groundAt(lx, lz, topY - 0.1, R * 0.9, 0.1);
-        if (topY - gy >= 0.25 && !G.blocked(lx, lz, gy, H_STAND, R)) {
+        if (topY - gy >= 0.25 && topY - gy <= 1.7 && !G.blocked(lx, lz, gy, H_STAND, R)) {
           P.anim = { type: 'vault', t: 0, dur: (P.sprint ? 0.5 : 0.62) * (1 + rr() * 0.5 * CH()), x0: x, z0: z, y0: y, x1: lx, z1: lz, y1: gy, top: topY, side: Math.random() < 0.5 ? -1 : 1, amp: 0.3 * (1 + rr() * 0.8 * CH()), keep: Math.max(Math.hypot(P.vx, P.vz), 3.5) * (1 + rr() * 0.3 * CH()), dx, dz };
           return true;
         }
@@ -1407,7 +1946,7 @@
   let musicOn = true, curMusic = null, lastZone = 'in';
 
   // Ces fonctions ne font rien tant que l'audio n'est pas démarré (il faut d'abord un clic du joueur)
-  const A = G.audio = { footstep() {}, thud() {}, jump() {}, flick() {}, update() {} };
+  const A = G.audio = { footstep() {}, thud() {}, jump() {}, flick() {}, fx() {}, update() {} };
 
   A.init = async function () {
     if (ac) return;
@@ -1416,7 +1955,7 @@
     master = ac.createGain(); master.gain.value = G.settings.volume; master.connect(ac.destination);
     musicBus = ac.createGain(); musicBus.gain.value = G.settings.music; musicBus.connect(master);
     fxBus = ac.createGain(); fxBus.gain.value = G.settings.fx; fxBus.connect(master);
-    A.footstep = footstep; A.thud = land; A.jump = jump; A.flick = pickup; A.update = update;
+    A.footstep = footstep; A.thud = land; A.jump = jump; A.flick = pickup; A.update = update; A.fx = (folder, vol) => play(folder, vol);
     if (location.protocol === 'file:') console.info('[audio] page ouverte en double-clic : le navigateur bloque les fichiers sons. Lance jouer.bat (ou python3 serve.py), voir audio/README.md.');
     else { try { const r = await fetch('audio/manifest.json', { cache: 'no-store' }); if (r.ok) manifest = await r.json(); } catch (e) { /* pas de sons : silence */ } }
     for (const folder in manifest.fx || {}) {            // charge et décode chaque fichier de chaque dossier
@@ -1448,7 +1987,7 @@
   }
   function startLoops() {
     loops.inside = makeLoop('ambience_inside'); loops.outside = makeLoop('ambience_outside');
-    loops.breathIdle = makeLoop('breath_idle'); loops.breathRun = makeLoop('breath_run');
+    loops.breathIdle = makeLoop('breath_idle'); loops.breathRun = makeLoop('breath_run'); loops.heartbeat = makeLoop('heartbeat');
     const p = ac.createPanner(); p.panningModel = 'HRTF'; p.refDistance = 1; p.rolloffFactor = 1.6;   // l'écran : son placé dans la pièce
     if (G.crtPos) { p.positionX.value = G.crtPos.x; p.positionY.value = G.crtPos.y; p.positionZ.value = G.crtPos.z; }
     p.connect(fxBus); loops.crt = makeLoop('crt', p);
@@ -1483,6 +2022,7 @@
     if (loops.crt) loops.crt.g.gain.setTargetAtTime(1, t, 0.2);
     if (loops.breathIdle) loops.breathIdle.g.gain.setTargetAtTime(0.6 * (1 - exert), t, 0.4);
     if (loops.breathRun) loops.breathRun.g.gain.setTargetAtTime(exert, t, 0.4);
+    if (loops.heartbeat) loops.heartbeat.g.gain.setTargetAtTime(G.clamp(((G.alert || 0) - 0.4) * 1.7, 0, 1), t, 0.3);   // le coeur bat quand la police approche
     const L = ac.listener;
     if (L.positionX) {
       L.positionX.value = cam.x; L.positionY.value = cam.y; L.positionZ.value = cam.z;
@@ -1521,6 +2061,7 @@
     progress(0.05, 'Rendu'); G.initRender(canvas); await tick();
     progress(0.2, 'Matières : béton, rouille, asphalte'); G.buildMaterials(); await tick();
     progress(0.5, 'Immeuble, escalier, rue'); G.buildWorld(); await tick();
+    progress(0.85, 'Police'); G.initCops();
     progress(0.9, 'Joueur'); G.initPlayer(); G.updateLamps(0, 0); G.render(0);
     progress(1, 'Prêt');
     last = performance.now(); requestAnimationFrame(loop);
@@ -1587,12 +2128,12 @@
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = G.clamp((now - last) / 1000, 0, 0.05); last = now; time += dt;   // jamais négatif ni trop grand
-    if (playing) { G.updatePlayer(dt); updateInteract(); }
+    if (playing) { if (!G.frozen) G.updatePlayer(dt); G.updateCops(dt); updateInteract(); }
     G.updateCamera(dt, time);
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
     const zone = G.zoneAt(G.P.pos);
-    G.scene.fog.density += ((zone === 'in' ? 0.04 : zone === 'field' ? 0.075 : 0.09) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
+    G.scene.fog.density += ((zone === 'in' ? 0.04 : zone === 'field' ? 0.07 : 0.072) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
     if (playing) { G.camera.getWorldDirection(fwd); G.audio.update(dt, G.camera.position, fwd, zone, G.P.exert); }
     G.render(time);
   }
@@ -1610,7 +2151,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'player', 'audio', 'game'];
+  const FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'places', 'dressing', 'cops', 'player', 'audio', 'game'];
   const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };

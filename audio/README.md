@@ -22,6 +22,9 @@ Tous les morceaux, joués dans un ordre aléatoire, avec un fondu de 4 s. Touche
 | `breath_run/` | respiration essoufflée après un sprint (boucle) | long, bouclable |
 | `crt/` | bourdonnement de l'écran, spatialisé dans la pièce (boucle) | long, bouclable |
 | `siren/` | sirène lointaine, toutes les 40 à 90 s | long |
+| `cop_alert/` | un policier te repère (« Hé ! Toi ! ») | court, plusieurs variantes |
+| `arrest/` | tu te fais arrêter | court |
+| `heartbeat/` | battements de coeur, de plus en plus forts quand l'alerte monte (boucle) | long, bouclable |
 
 Les ambiances et respirations passent de l'une à l'autre en fondu (dedans/dehors, repos/effort).
 Pour ajouter un nouvel élément plus tard (porte, tonneau...), dis-le-moi : je crée le dossier et je le branche.

@@ -23,6 +23,7 @@
     progress(0.05, 'Rendu'); G.initRender(canvas); await tick();
     progress(0.2, 'Matières : béton, rouille, asphalte'); G.buildMaterials(); await tick();
     progress(0.5, 'Immeuble, escalier, rue'); G.buildWorld(); await tick();
+    progress(0.85, 'Police'); G.initCops();
     progress(0.9, 'Joueur'); G.initPlayer(); G.updateLamps(0, 0); G.render(0);
     progress(1, 'Prêt');
     last = performance.now(); requestAnimationFrame(loop);
@@ -89,12 +90,12 @@
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = G.clamp((now - last) / 1000, 0, 0.05); last = now; time += dt;   // jamais négatif ni trop grand
-    if (playing) { G.updatePlayer(dt); updateInteract(); }
+    if (playing) { if (!G.frozen) G.updatePlayer(dt); G.updateCops(dt); updateInteract(); }
     G.updateCamera(dt, time);
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
     const zone = G.zoneAt(G.P.pos);
-    G.scene.fog.density += ((zone === 'in' ? 0.04 : zone === 'field' ? 0.075 : 0.09) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
+    G.scene.fog.density += ((zone === 'in' ? 0.04 : zone === 'field' ? 0.07 : 0.072) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
     if (playing) { G.camera.getWorldDirection(fwd); G.audio.update(dt, G.camera.position, fwd, zone, G.P.exert); }
     G.render(time);
   }

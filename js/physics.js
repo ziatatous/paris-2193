@@ -23,7 +23,7 @@
       }
     return c;
   }
-  G.addBoxCollider = (x0, x1, y0, y1, z0, z1) => insert({ t: 0, minX: x0, maxX: x1, minY: y0, maxY: y1, minZ: z0, maxZ: z1, q: 0 });
+  G.addBoxCollider = (x0, x1, y0, y1, z0, z1) => insert({ t: 0, minX: Math.min(x0, x1), maxX: Math.max(x0, x1), minY: Math.min(y0, y1), maxY: Math.max(y0, y1), minZ: Math.min(z0, z1), maxZ: Math.max(z0, z1), q: 0 });
   G.addSegCollider = (ax, az, bx, bz, y0, y1) => insert({ t: 1, ax, az, bx, bz, l2: (bx - ax) * (bx - ax) + (bz - az) * (bz - az) || 1e-6,
     minX: Math.min(ax, bx), maxX: Math.max(ax, bx), minZ: Math.min(az, bz), maxZ: Math.max(az, bz), minY: y0, maxY: y1, q: 0 });
   // Un rectangle tourné (voiture, caisse en biais) = 4 segments

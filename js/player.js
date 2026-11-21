@@ -54,7 +54,7 @@
       let i = flags.indexOf(true), edge = -1; if (i >= 0) for (; i < flags.length; i++) if (!flags[i]) { edge = i; break; }
       if (edge >= 0) {
         const s = 0.1 + edge * 0.15 + 0.5, lx = x + dx * (d0 + s), lz = z + dz * (d0 + s), gy = G.groundAt(lx, lz, topY - 0.1, R * 0.9, 0.1);
-        if (topY - gy >= 0.25 && !G.blocked(lx, lz, gy, H_STAND, R)) {
+        if (topY - gy >= 0.25 && topY - gy <= 1.7 && !G.blocked(lx, lz, gy, H_STAND, R)) {
           P.anim = { type: 'vault', t: 0, dur: (P.sprint ? 0.5 : 0.62) * (1 + rr() * 0.5 * CH()), x0: x, z0: z, y0: y, x1: lx, z1: lz, y1: gy, top: topY, side: Math.random() < 0.5 ? -1 : 1, amp: 0.3 * (1 + rr() * 0.8 * CH()), keep: Math.max(Math.hypot(P.vx, P.vz), 3.5) * (1 + rr() * 0.3 * CH()), dx, dz };
           return true;
         }

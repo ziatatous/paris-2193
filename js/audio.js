@@ -15,7 +15,7 @@
   let musicOn = true, curMusic = null, lastZone = 'in';
 
   // Ces fonctions ne font rien tant que l'audio n'est pas démarré (il faut d'abord un clic du joueur)
-  const A = G.audio = { footstep() {}, thud() {}, jump() {}, flick() {}, update() {} };
+  const A = G.audio = { footstep() {}, thud() {}, jump() {}, flick() {}, fx() {}, update() {} };
 
   A.init = async function () {
     if (ac) return;
@@ -24,7 +24,7 @@
     master = ac.createGain(); master.gain.value = G.settings.volume; master.connect(ac.destination);
     musicBus = ac.createGain(); musicBus.gain.value = G.settings.music; musicBus.connect(master);
     fxBus = ac.createGain(); fxBus.gain.value = G.settings.fx; fxBus.connect(master);
-    A.footstep = footstep; A.thud = land; A.jump = jump; A.flick = pickup; A.update = update;
+    A.footstep = footstep; A.thud = land; A.jump = jump; A.flick = pickup; A.update = update; A.fx = (folder, vol) => play(folder, vol);
     if (location.protocol === 'file:') console.info('[audio] page ouverte en double-clic : le navigateur bloque les fichiers sons. Lance jouer.bat (ou python3 serve.py), voir audio/README.md.');
     else { try { const r = await fetch('audio/manifest.json', { cache: 'no-store' }); if (r.ok) manifest = await r.json(); } catch (e) { /* pas de sons : silence */ } }
     for (const folder in manifest.fx || {}) {            // charge et décode chaque fichier de chaque dossier
@@ -56,7 +56,7 @@
   }
   function startLoops() {
     loops.inside = makeLoop('ambience_inside'); loops.outside = makeLoop('ambience_outside');
-    loops.breathIdle = makeLoop('breath_idle'); loops.breathRun = makeLoop('breath_run');
+    loops.breathIdle = makeLoop('breath_idle'); loops.breathRun = makeLoop('breath_run'); loops.heartbeat = makeLoop('heartbeat');
     const p = ac.createPanner(); p.panningModel = 'HRTF'; p.refDistance = 1; p.rolloffFactor = 1.6;   // l'écran : son placé dans la pièce
     if (G.crtPos) { p.positionX.value = G.crtPos.x; p.positionY.value = G.crtPos.y; p.positionZ.value = G.crtPos.z; }
     p.connect(fxBus); loops.crt = makeLoop('crt', p);
@@ -91,6 +91,7 @@
     if (loops.crt) loops.crt.g.gain.setTargetAtTime(1, t, 0.2);
     if (loops.breathIdle) loops.breathIdle.g.gain.setTargetAtTime(0.6 * (1 - exert), t, 0.4);
     if (loops.breathRun) loops.breathRun.g.gain.setTargetAtTime(exert, t, 0.4);
+    if (loops.heartbeat) loops.heartbeat.g.gain.setTargetAtTime(G.clamp(((G.alert || 0) - 0.4) * 1.7, 0, 1), t, 0.3);   // le coeur bat quand la police approche
     const L = ac.listener;
     if (L.positionX) {
       L.positionX.value = cam.x; L.positionY.value = cam.y; L.positionZ.value = cam.z;

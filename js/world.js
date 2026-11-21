@@ -31,6 +31,7 @@
   // B(x0,x1, y0,y1, z0,z1, matériau, options) : une boîte définie par ses limites. Collision par défaut.
   G.B = function (x0, x1, y0, y1, z0, z1, mat, o) {
     o = o || {};
+    if (x0 > x1) { const t = x0; x0 = x1; x1 = t; } if (y0 > y1) { const t = y0; y0 = y1; y1 = t; } if (z0 > z1) { const t = z0; z0 = z1; z1 = t; }   // limites dans le désordre : on les remet dans l'ordre
     const w = x1 - x0, h = y1 - y0, d = z1 - z0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
     let mesh = null;
     if (!o.nomesh) {
@@ -203,6 +204,7 @@
   function ball(group, mat, p, r, sx, sy, sz, seg) {
     const m = new T.Mesh(new T.SphereGeometry(r, seg || 12, (seg || 12) - 2), mat); m.position.set(...p); m.scale.set(sx || 1, sy || 1, sz || 1); group.add(m); return m;
   }
+  G.limb = limb; G.ball = ball;
   G.buildBody = function (px, pz, ry) {
     const g = new T.Group(); g.position.set(px, 0, pz); g.rotation.y = ry || 0;
     const ph = c => new T.MeshPhongMaterial({ color: c, shininess: 6 });
@@ -236,7 +238,7 @@
     glowTex = G.glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']]);
     G.scene.background = new T.Color(0x161b1e);
     G.scene.fog = new T.FogExp2(0x161b1e, 0.09);
-    G.scene.add(new T.HemisphereLight(0x55626b, 0x1d2224, 0.95));         // ciel gris-bleu en haut, sol sombre en bas
+    G.scene.add(new T.HemisphereLight(0x5d6a73, 0x252a2c, 1.35));         // ciel gris-bleu en haut, sol sombre en bas
     G.pool = [0, 1, 2].map(() => { const l = new T.PointLight(0xffffff, 0, 10, 2); G.scene.add(l); return l; });
     buildTower(); G.buildCity();
   };

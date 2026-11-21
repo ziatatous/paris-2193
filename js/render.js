@@ -14,7 +14,7 @@
 
   const VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }`;
   const FRAG = `
-    uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform vec2 texel; uniform float time; uniform float flash;
+    uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform vec2 texel; uniform float time; uniform float flash; uniform float alert;
     uniform float near; uniform float far; uniform float tanHalf; uniform float aspect; uniform float aoK;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -49,6 +49,8 @@
       col = mix(vec3(l), col, 0.62) * vec3(0.93, 1.0, 0.95) + 0.028;
       col += (hash(gl_FragCoord.xy + fract(time) * 71.0) - 0.5) * 0.13;   // grain (marqué)
       col *= smoothstep(1.15, 0.3, length(c) * 1.3);             // bords sombres, doux
+      float edge = smoothstep(0.25, 0.95, length(c) * 1.4);                                   // alerte : les bords rougissent et battent comme un pouls
+      col.r += alert * edge * (0.16 + 0.07 * sin(time * 9.0)); col.gb *= 1.0 - alert * edge * 0.35;
       col += flash;
       gl_FragColor = vec4(col, 1.0);
     }`;
@@ -62,7 +64,7 @@
     G.postScene = new T.Scene();
     G.postCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     G.postMat = new T.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, texel: { value: new T.Vector2(1 / 576, 1 / 324) }, time: { value: 0 }, flash: { value: 0 },
+      uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, texel: { value: new T.Vector2(1 / 576, 1 / 324) }, time: { value: 0 }, flash: { value: 0 }, alert: { value: 0 },
                   near: { value: 0.05 }, far: { value: 90 }, tanHalf: { value: 0.7 }, aspect: { value: 16 / 9 }, aoK: { value: 1 } },
       vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false
     });
@@ -87,7 +89,7 @@
 
   G.render = function (time) {
     const u = G.postMat.uniforms;
-    u.time.value = time; u.aspect.value = G.camera.aspect; u.tanHalf.value = Math.tan(G.camera.fov * Math.PI / 360);
+    u.time.value = time; u.alert.value = G.alert || 0; u.aspect.value = G.camera.aspect; u.tanHalf.value = Math.tan(G.camera.fov * Math.PI / 360);
     G.renderer.setRenderTarget(G.rt);
     G.renderer.render(G.scene, G.camera);
     G.renderer.setRenderTarget(null);
