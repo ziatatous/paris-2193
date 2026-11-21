@@ -777,7 +777,7 @@
   G.buildWorld = function () {
     glowTex = G.glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']]);
     G.scene.background = new T.Color(0x161b1e);
-    G.scene.fog = new T.FogExp2(0x161b1e, 0.09);
+    G.scene.fog = new T.FogExp2(0x161b1e, 0.105);
     G.scene.add(new T.HemisphereLight(0x5d6a73, 0x252a2c, 1.35));         // ciel gris-bleu en haut, sol sombre en bas
     G.pool = [0, 1, 2].map(() => { const l = new T.PointLight(0xffffff, 0, 10, 2); G.scene.add(l); return l; });
     buildTower(); G.buildCity();
@@ -1086,21 +1086,41 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     G.scene.add(im);
     for (const y of [0.1, 1.5, 2.95]) mesh(new T.BoxGeometry(hw * 2, 0.06, 0.06), M().iron, cx, y, cz).rotation.y = Math.atan2(-pz, px);
   }
-  // Un policier (utilisé aussi par cops.js) : uniforme sombre, casque, gilet ; parties nommées pour l'animation
+  // Un policier (utilisé par cops.js) : squelette articulé (bassin > torse > épaules > coudes ; hanches > genoux), casque + lampe frontale.
+  // Chaque articulation est un "pivot" (Group) qu'on tourne pour animer ; le dessin est dans cops.js (animate).
   G.makeCop = function () {
-    const g = new T.Group(), P = c => new T.MeshPhongMaterial({ color: c, shininess: 6 });
-    const uni = P(0x1c2228), vest = P(0x2c343b), helm = P(0x101418), skin = P(0x6d625c), boot = P(0x08090a);
-    const parts = {};
-    parts.torso = G.limb(g, vest, [0, 1.0, 0], [0, 1.5, 0], 0.2, 0.23, 8); G.ball(g, vest, [0, 1.5, 0], 0.22, 1, 0.5, 0.8, 8);
-    parts.head = new T.Group(); parts.head.position.set(0, 1.72, 0); g.add(parts.head);
-    G.ball(parts.head, skin, [0, 0, 0], 0.11, 0.9, 1.05, 1, 10); G.ball(parts.head, helm, [0, 0.06, 0], 0.135, 1, 0.8, 1.05, 10);
-    const visor = new T.Mesh(new T.BoxGeometry(0.2, 0.05, 0.05), P(0x20282e)); visor.position.set(0, 0.0, 0.1); parts.head.add(visor);
+    const g = new T.Group(), P = (c, s) => new T.MeshPhongMaterial({ color: c, shininess: s === undefined ? 6 : s });
+    const uni = P(0x1c2228), vest = P(0x2c343b), helm = P(0x101418), skin = P(0x6d625c), boot = P(0x08090a), glove = P(0x0c0e10), metal = P(0x252b31, 30);
+    const rig = {}, pivot = (parent, x, y, z) => { const q = new T.Group(); q.position.set(x, y, z); parent.add(q); return q; };
+    rig.hips = pivot(g, 0, 0.98, 0);                                                           // bassin (le point qui monte et descend à la marche)
+    G.ball(rig.hips, uni, [0, 0.02, 0], 0.17, 1.2, 0.7, 0.9, 8);
+    rig.torso = pivot(rig.hips, 0, 0.05, 0);                                                    // torse (se penche, se tord)
+    G.limb(rig.torso, vest, [0, 0.0, 0], [0, 0.5, 0], 0.2, 0.25, 8); G.ball(rig.torso, vest, [0, 0.5, 0], 0.24, 1.05, 0.5, 0.8, 8);
+    const belt = new T.Mesh(new T.BoxGeometry(0.4, 0.06, 0.26), glove); belt.position.set(0, 0.04, 0); rig.torso.add(belt);
+    const holster = new T.Mesh(new T.BoxGeometry(0.08, 0.2, 0.1), glove); holster.position.set(0.22, 0.0, 0.02); rig.torso.add(holster);
+    const radio = new T.Mesh(new T.BoxGeometry(0.07, 0.13, 0.05), metal); radio.position.set(-0.2, 0.46, 0.12); rig.torso.add(radio);         // radio d'épaule
+    const ant = new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.2, 4), glove); ant.position.set(-0.2, 0.62, 0.12); rig.torso.add(ant);
+    rig.neck = pivot(rig.torso, 0, 0.62, 0);
+    rig.head = pivot(rig.neck, 0, 0.1, 0);
+    G.ball(rig.head, skin, [0, 0.0, 0], 0.105, 0.9, 1.05, 1, 10); G.ball(rig.head, helm, [0, 0.06, -0.005], 0.14, 1, 0.78, 1.08, 10);   // visage et casque
+    const visor = new T.Mesh(new T.BoxGeometry(0.19, 0.045, 0.05), P(0x20282e, 40)); visor.position.set(0, 0.015, 0.095); rig.head.add(visor);
+    const lampBody = new T.Mesh(new T.CylinderGeometry(0.025, 0.03, 0.06, 6), metal); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0.07, 0.08, 0.13); rig.head.add(lampBody);   // lampe frontale
+    const beam = new T.Mesh(new T.CylinderGeometry(0.03, 1.1, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
+    beam.rotation.x = Math.PI / 2 + 0.1; beam.position.set(0.07, 0.04, 4.1); rig.head.add(beam); rig.beam = beam;                               // faisceau visible dans la brume
     for (const s of [-1, 1]) {
-      const arm = new T.Group(); arm.position.set(s * 0.26, 1.45, 0); g.add(arm); G.limb(arm, uni, [0, 0, 0], [0, -0.55, 0], 0.07, 0.055, 6); parts['arm' + s] = arm;
-      const leg = new T.Group(); leg.position.set(s * 0.11, 1.0, 0); g.add(leg); G.limb(leg, uni, [0, 0, 0], [0, -1.0, 0], 0.1, 0.07, 6); G.ball(leg, boot, [0, -1.0, 0.04], 0.08, 0.9, 0.6, 1.6, 6); parts['leg' + s] = leg;
+      const sh = pivot(rig.torso, s * 0.3, 0.5, 0);                                              // épaule
+      G.limb(sh, uni, [0, 0, 0], [0, -0.3, 0], 0.075, 0.062, 6); G.ball(sh, vest, [0, 0, 0], 0.085, 1, 1, 1, 6);
+      const el = pivot(sh, 0, -0.3, 0); G.limb(el, uni, [0, 0, 0], [0, -0.28, 0], 0.062, 0.05, 6);   // coude
+      G.ball(el, glove, [0, -0.31, 0.01], 0.055, 0.9, 1.1, 1, 6);
+      rig['sh' + s] = sh; rig['el' + s] = el;
+      const hip = pivot(rig.hips, s * 0.11, -0.04, 0);                                            // hanche
+      G.limb(hip, uni, [0, 0, 0], [0, -0.45, 0], 0.1, 0.075, 6);
+      const kn = pivot(hip, 0, -0.45, 0); G.limb(kn, uni, [0, 0, 0], [0, -0.45, 0], 0.075, 0.06, 6);   // genou
+      G.ball(kn, boot, [0, -0.47, 0.05], 0.085, 0.95, 0.65, 1.7, 6);
+      rig['hip' + s] = hip; rig['kn' + s] = kn;
     }
-    const baton = new T.Mesh(new T.CylinderGeometry(0.02, 0.025, 0.7, 5), P(0x0a0a0a)); baton.position.set(0, -0.45, 0.15); baton.rotation.x = 1.2; parts['arm1'].add(baton);
-    g.userData.parts = parts; return g;
+    const baton = new T.Mesh(new T.CylinderGeometry(0.02, 0.025, 0.55, 5), glove); baton.position.set(0, -0.36, 0.2); baton.rotation.x = 1.3; rig['el1'].add(baton);
+    g.userData.rig = rig; g.userData.parts = rig; return g;
   };
 
   /* ---------- Marché : étals bâchés, lampes nues ---------- */
@@ -1516,7 +1536,8 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   /* ---------- Un policier ---------- */
   function addCop(group, home, facing, patrol) {
     const c = { g: group, x: home[0], z: home[1], y: 0, facing, home: home.slice(), homeFacing: facing, patrol: patrol || null, pi: 0, state: 'idle', alert: 0, last: null, lostT: 0, searchT: 0,
-      path: [], pathT: 0, speed: 0, phase: 0, v: new T.Vector3(), stuckT: 0, lx: home[0], lz: home[1], wait: 0 };
+      path: [], pathT: 0, speed: 0, phase: 0, v: new T.Vector3(), stuckT: 0, lx: home[0], lz: home[1], wait: 0, seed: Math.random() * 20, shoutT: 0 };
+    c.lamp = G.addLamp({ x: home[0], y: 1.7, z: home[1], color: 0xcfe0ff, I: 0.75, dist: 9, halo: 0, bulb: false });
     G.scene.add(group); cops.push(c); return c;
   }
   function eyePos() { const P = G.P; return [P.pos.x, P.pos.y + 1.2, P.pos.z]; }
@@ -1571,7 +1592,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
         }
         break;
       case 'suspicious':
-        if (c.alert >= 1) { c.state = 'chase'; snd('fx', 'cop_alert', 1); G.say && G.say('« Hé ! Toi ! Ne bouge pas ! »', 2500); break; }
+        if (c.alert >= 1) { c.state = 'chase'; c.shoutT = 1.0; snd('fx', 'cop_alert', 1); G.say && G.say('« Hé ! Toi ! Ne bouge pas ! »', 2500); break; }
         if (c.alert < 0.12) { c.state = 'idle'; break; }
         if (c.last) { if (Math.hypot(c.last[0] - c.x, c.last[1] - c.z) > 2.5) steer(c, c.last[0], c.last[1], SPEED.investigate, dt); else face(c, c.last[0], c.last[1], dt, 3); }
         break;
@@ -1589,14 +1610,38 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
         break;
     }
   }
+  // Animation : le squelette (places.js, G.makeCop) est animé à la main. Rotation x positive = le haut part vers l'avant, un pied part vers l'arrière.
   function animate(c, dt) {
-    const parts = c.g.userData.parts, chase = c.state === 'chase';
-    c.phase += c.speed * dt * (chase ? 1.5 : 2.0);
-    const sw = Math.min(1, c.speed / 3) * (chase ? 0.9 : 0.55), s = Math.sin(c.phase);
-    parts.leg1.rotation.x = s * sw; parts['leg-1'].rotation.x = -s * sw;                  // les jambes et les bras se balancent en opposition
-    parts.arm1.rotation.x = -s * sw * 0.8; parts['arm-1'].rotation.x = s * sw * 0.8;
-    c.g.position.set(c.x, c.y + Math.abs(s) * 0.03 * Math.min(1, c.speed / 3), c.z); c.g.rotation.y = c.facing; c.g.rotation.x = chase ? 0.14 : 0;
-    parts.head.rotation.y = c.state === 'suspicious' ? Math.sin(performance.now() / 500) * 0.5 : 0;
+    const r = c.g.userData.rig, t = performance.now() / 1000 + c.seed, run = c.state === 'chase', sus = c.state === 'suspicious' || c.state === 'search';
+    const f = G.clamp(c.speed / (run ? 6 : 2.4), 0, 1);                                    // 0 = immobile, 1 = pleine allure
+    c.phase += c.speed * dt * (run ? 1.35 : 1.9); c.shoutT = Math.max(0, (c.shoutT || 0) - dt);
+    const s = Math.sin(c.phase), amp = (run ? 0.95 : 0.5) * f, idle = f < 0.1;
+    // Jambes : la cuisse balance, le genou se plie quand la jambe passe vers l'avant
+    for (const side of [1, -1]) {
+      const ph = side === 1 ? s : -s;
+      r['hip' + side].rotation.x = ph * amp - (sus && !run ? 0.08 : 0);
+      r['kn' + side].rotation.x = Math.max(0, -ph) * amp * 1.5 + (run ? 0.2 : 0.05 * f) + (idle ? 0 : 0);
+    }
+    // Bassin : monte et descend à chaque pas, se balance ; accroupi quand il se méfie
+    r.hips.position.y = 0.98 + Math.abs(Math.cos(c.phase)) * 0.045 * f * (run ? 1.8 : 1) - (sus ? 0.07 : 0) - (run ? 0.04 : 0);
+    r.hips.position.x = Math.sin(c.phase) * 0.025 * f + Math.sin(t * 0.4) * 0.03 * (idle ? 1 : 0);                       // à l'arrêt : il se déhanche, change d'appui
+    // Torse : se tord avec la marche, se penche en courant, respire
+    r.torso.rotation.y = -s * 0.15 * f + (c.shoutT > 0 ? 0.25 : 0); r.torso.rotation.x = (run ? 0.3 : sus ? 0.1 : 0) + Math.sin(t * 1.6) * 0.012; r.torso.scale.y = 1 + Math.sin(t * 1.6) * 0.012;
+    // Bras : en opposition aux jambes ; coudes pliés (très pliés en courant)
+    let armR = -r.hip1.rotation.x * 0.0 + (-1) * (-s) * amp * 0.9, armL = -s * amp * 0.9; armR = s * amp * 0.9;
+    r['sh1'].rotation.x = armR; r['sh-1'].rotation.x = -armR;
+    r['el1'].rotation.x = -(run ? 1.25 : 0.25 + 0.15 * f); r['el-1'].rotation.x = -(run ? 1.25 : 0.25 + 0.15 * f);
+    // Attitudes à l'arrêt : radio à l'épaule de temps en temps ; main près de l'étui quand il se méfie ; geste vers le joueur quand il crie
+    const radio = idle && c.state === 'idle' && ((t * 0.5 + c.seed) % 6) < 1.4;
+    if (radio) { r['sh1'].rotation.x = -2.1; r['el1'].rotation.x = -1.7; r.head.rotation.z = 0.12; } else r.head.rotation.z = 0;
+    if (sus && !run) { r['sh1'].rotation.x = -0.35; r['el1'].rotation.x = -0.5; r['sh-1'].rotation.x = -0.6; r['el-1'].rotation.x = -0.9; }
+    if (c.shoutT > 0) { r['sh1'].rotation.x = -1.55; r['el1'].rotation.x = -0.15; r.head.rotation.x = -0.15; } else r.head.rotation.x = run ? 0.05 : 0;
+    if (G.arrest && run) { r['sh1'].rotation.x = -1.2; r['sh-1'].rotation.x = -1.2; r['el1'].rotation.x = -0.4; r['el-1'].rotation.x = -0.4; }
+    // Tête : balayage lent à l'arrêt, plus nerveux quand il se méfie, fixe en courant
+    r.head.rotation.y = run ? 0 : sus ? Math.sin(t * 2.2) * 0.9 : Math.sin(t * 0.6) * 0.55;
+    r.beam.material.opacity = 0.03 + Math.min(1, c.alert) * 0.05;
+    c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.facing;
+    if (c.lamp) { const fx = Math.sin(c.facing + r.head.rotation.y), fz = Math.cos(c.facing + r.head.rotation.y); c.lamp.pos.set(c.x + fx * 0.9, c.y + 1.7, c.z + fz * 0.9); }   // la lampe frontale éclaire là où il regarde
   }
 
   function arrest(c) {
@@ -2132,7 +2177,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
     const zone = G.zoneAt(G.P.pos);
-    G.scene.fog.density += ((zone === 'in' ? 0.04 : zone === 'field' ? 0.07 : 0.072) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
+    G.scene.fog.density += ((zone === 'in' ? 0.05 : zone === 'field' ? 0.095 : 0.105) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
     if (playing) { G.camera.getWorldDirection(fwd); G.audio.update(dt, G.camera.position, fwd, zone, G.P.exert); }
     G.render(time);
   }

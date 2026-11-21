@@ -237,7 +237,7 @@
   G.buildWorld = function () {
     glowTex = G.glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']]);
     G.scene.background = new T.Color(0x161b1e);
-    G.scene.fog = new T.FogExp2(0x161b1e, 0.09);
+    G.scene.fog = new T.FogExp2(0x161b1e, 0.105);
     G.scene.add(new T.HemisphereLight(0x5d6a73, 0x252a2c, 1.35));         // ciel gris-bleu en haut, sol sombre en bas
     G.pool = [0, 1, 2].map(() => { const l = new T.PointLight(0xffffff, 0, 10, 2); G.scene.add(l); return l; });
     buildTower(); G.buildCity();

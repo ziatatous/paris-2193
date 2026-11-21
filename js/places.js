@@ -79,21 +79,41 @@
     G.scene.add(im);
     for (const y of [0.1, 1.5, 2.95]) mesh(new T.BoxGeometry(hw * 2, 0.06, 0.06), M().iron, cx, y, cz).rotation.y = Math.atan2(-pz, px);
   }
-  // Un policier (utilisé aussi par cops.js) : uniforme sombre, casque, gilet ; parties nommées pour l'animation
+  // Un policier (utilisé par cops.js) : squelette articulé (bassin > torse > épaules > coudes ; hanches > genoux), casque + lampe frontale.
+  // Chaque articulation est un "pivot" (Group) qu'on tourne pour animer ; le dessin est dans cops.js (animate).
   G.makeCop = function () {
-    const g = new T.Group(), P = c => new T.MeshPhongMaterial({ color: c, shininess: 6 });
-    const uni = P(0x1c2228), vest = P(0x2c343b), helm = P(0x101418), skin = P(0x6d625c), boot = P(0x08090a);
-    const parts = {};
-    parts.torso = G.limb(g, vest, [0, 1.0, 0], [0, 1.5, 0], 0.2, 0.23, 8); G.ball(g, vest, [0, 1.5, 0], 0.22, 1, 0.5, 0.8, 8);
-    parts.head = new T.Group(); parts.head.position.set(0, 1.72, 0); g.add(parts.head);
-    G.ball(parts.head, skin, [0, 0, 0], 0.11, 0.9, 1.05, 1, 10); G.ball(parts.head, helm, [0, 0.06, 0], 0.135, 1, 0.8, 1.05, 10);
-    const visor = new T.Mesh(new T.BoxGeometry(0.2, 0.05, 0.05), P(0x20282e)); visor.position.set(0, 0.0, 0.1); parts.head.add(visor);
+    const g = new T.Group(), P = (c, s) => new T.MeshPhongMaterial({ color: c, shininess: s === undefined ? 6 : s });
+    const uni = P(0x1c2228), vest = P(0x2c343b), helm = P(0x101418), skin = P(0x6d625c), boot = P(0x08090a), glove = P(0x0c0e10), metal = P(0x252b31, 30);
+    const rig = {}, pivot = (parent, x, y, z) => { const q = new T.Group(); q.position.set(x, y, z); parent.add(q); return q; };
+    rig.hips = pivot(g, 0, 0.98, 0);                                                           // bassin (le point qui monte et descend à la marche)
+    G.ball(rig.hips, uni, [0, 0.02, 0], 0.17, 1.2, 0.7, 0.9, 8);
+    rig.torso = pivot(rig.hips, 0, 0.05, 0);                                                    // torse (se penche, se tord)
+    G.limb(rig.torso, vest, [0, 0.0, 0], [0, 0.5, 0], 0.2, 0.25, 8); G.ball(rig.torso, vest, [0, 0.5, 0], 0.24, 1.05, 0.5, 0.8, 8);
+    const belt = new T.Mesh(new T.BoxGeometry(0.4, 0.06, 0.26), glove); belt.position.set(0, 0.04, 0); rig.torso.add(belt);
+    const holster = new T.Mesh(new T.BoxGeometry(0.08, 0.2, 0.1), glove); holster.position.set(0.22, 0.0, 0.02); rig.torso.add(holster);
+    const radio = new T.Mesh(new T.BoxGeometry(0.07, 0.13, 0.05), metal); radio.position.set(-0.2, 0.46, 0.12); rig.torso.add(radio);         // radio d'épaule
+    const ant = new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.2, 4), glove); ant.position.set(-0.2, 0.62, 0.12); rig.torso.add(ant);
+    rig.neck = pivot(rig.torso, 0, 0.62, 0);
+    rig.head = pivot(rig.neck, 0, 0.1, 0);
+    G.ball(rig.head, skin, [0, 0.0, 0], 0.105, 0.9, 1.05, 1, 10); G.ball(rig.head, helm, [0, 0.06, -0.005], 0.14, 1, 0.78, 1.08, 10);   // visage et casque
+    const visor = new T.Mesh(new T.BoxGeometry(0.19, 0.045, 0.05), P(0x20282e, 40)); visor.position.set(0, 0.015, 0.095); rig.head.add(visor);
+    const lampBody = new T.Mesh(new T.CylinderGeometry(0.025, 0.03, 0.06, 6), metal); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0.07, 0.08, 0.13); rig.head.add(lampBody);   // lampe frontale
+    const beam = new T.Mesh(new T.CylinderGeometry(0.03, 1.1, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
+    beam.rotation.x = Math.PI / 2 + 0.1; beam.position.set(0.07, 0.04, 4.1); rig.head.add(beam); rig.beam = beam;                               // faisceau visible dans la brume
     for (const s of [-1, 1]) {
-      const arm = new T.Group(); arm.position.set(s * 0.26, 1.45, 0); g.add(arm); G.limb(arm, uni, [0, 0, 0], [0, -0.55, 0], 0.07, 0.055, 6); parts['arm' + s] = arm;
-      const leg = new T.Group(); leg.position.set(s * 0.11, 1.0, 0); g.add(leg); G.limb(leg, uni, [0, 0, 0], [0, -1.0, 0], 0.1, 0.07, 6); G.ball(leg, boot, [0, -1.0, 0.04], 0.08, 0.9, 0.6, 1.6, 6); parts['leg' + s] = leg;
+      const sh = pivot(rig.torso, s * 0.3, 0.5, 0);                                              // épaule
+      G.limb(sh, uni, [0, 0, 0], [0, -0.3, 0], 0.075, 0.062, 6); G.ball(sh, vest, [0, 0, 0], 0.085, 1, 1, 1, 6);
+      const el = pivot(sh, 0, -0.3, 0); G.limb(el, uni, [0, 0, 0], [0, -0.28, 0], 0.062, 0.05, 6);   // coude
+      G.ball(el, glove, [0, -0.31, 0.01], 0.055, 0.9, 1.1, 1, 6);
+      rig['sh' + s] = sh; rig['el' + s] = el;
+      const hip = pivot(rig.hips, s * 0.11, -0.04, 0);                                            // hanche
+      G.limb(hip, uni, [0, 0, 0], [0, -0.45, 0], 0.1, 0.075, 6);
+      const kn = pivot(hip, 0, -0.45, 0); G.limb(kn, uni, [0, 0, 0], [0, -0.45, 0], 0.075, 0.06, 6);   // genou
+      G.ball(kn, boot, [0, -0.47, 0.05], 0.085, 0.95, 0.65, 1.7, 6);
+      rig['hip' + s] = hip; rig['kn' + s] = kn;
     }
-    const baton = new T.Mesh(new T.CylinderGeometry(0.02, 0.025, 0.7, 5), P(0x0a0a0a)); baton.position.set(0, -0.45, 0.15); baton.rotation.x = 1.2; parts['arm1'].add(baton);
-    g.userData.parts = parts; return g;
+    const baton = new T.Mesh(new T.CylinderGeometry(0.02, 0.025, 0.55, 5), glove); baton.position.set(0, -0.36, 0.2); baton.rotation.x = 1.3; rig['el1'].add(baton);
+    g.userData.rig = rig; g.userData.parts = rig; return g;
   };
 
   /* ---------- Marché : étals bâchés, lampes nues ---------- */
