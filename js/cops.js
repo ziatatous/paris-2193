@@ -109,7 +109,7 @@
     const range = 20 * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
     const dot = dist > 0.01 ? (dx * Math.sin(c.facing) + dz * Math.cos(c.facing)) / dist : 1;
     const e = [P.pos.x, P.pos.y + (crouched ? 0.7 : 1.2), P.pos.z];
-    const sees = !G.arrest && !hidden && dist < range && (dist < 3 || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));
+    const sees = !G.arrest && !hidden && dist < range && (dist < (crouched ? 1.8 : 3) || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));
     const noise = P.mode === 'slide' || P.dashT > 0 ? 12 : P.sprint ? 8 : P.mode === 'wallrun' ? 9 : (P.speed > 1 && P.h > 1.5) ? 3 : 1;
     const hears = !G.arrest && !hidden && !sees && dist < noise && Math.abs(P.pos.y - c.y) < 3;
     if (sees) { c.alert = Math.min(1.5, c.alert + dt * (0.9 + (1 - dist / range) * 1.6)); c.last = [P.pos.x, P.pos.z]; c.lostT = 0; }

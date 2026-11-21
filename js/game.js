@@ -25,8 +25,9 @@
     if (G.loadCopModel) { progress(0.3, 'Modèle du policier'); await G.loadCopModel(); }
     if (G.mode === 'sandbox') { progress(0.5, 'Grande carte (ancienne)'); G.buildWorld(); await tick(); progress(0.85, 'Police'); G.initCops(); }
     else if (G.mode === 'lab') { progress(0.5, 'Labo policier'); G.buildBase(); G.buildLab(); await tick(); }
-    else { progress(0.5, 'Niveau 1 : chez nous'); G.buildBase(); G.buildTower(); G.buildLevel1(); await tick(); }
-    progress(0.9, 'Joueur'); G.initPlayer(); if (G.mode === 'lab') { G.P.pos.set(0, 0, 4); G.P.safe.set(0, 0, 4); G.P.eye = 1.62; } G.updateLamps(0, 0); G.render(0);
+    else { progress(0.5, 'Niveau 1 : chez nous'); G.buildBase(); G.buildLevel1(); await tick(); }
+    progress(0.9, 'Joueur'); G.initPlayer(); if (G.mode === 'level' && G.placeStart) G.placeStart();
+    if (G.mode === 'lab') { G.P.pos.set(0, 0, 4); G.P.safe.set(0, 0, 4); G.P.eye = 1.62; } G.updateLamps(0, 0); G.render(0);
     progress(1, 'Prêt');
     last = performance.now(); requestAnimationFrame(loop);
     bindInput();

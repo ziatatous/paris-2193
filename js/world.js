@@ -35,11 +35,30 @@
     const w = x1 - x0, h = y1 - y0, d = z1 - z0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
     let mesh = null;
     if (!o.nomesh) {
-      mesh = new T.Mesh(boxGeo(w, h, d, cx, cy, cz, o.tile || 2.5, o.grime !== false, o.grimeBase !== undefined ? o.grimeBase : y0), mat);
-      mesh.position.set(cx, cy, cz); G.scene.add(mesh);
+      const geo = boxGeo(w, h, d, cx, cy, cz, o.tile || 2.5, o.grime !== false, o.grimeBase !== undefined ? o.grimeBase : y0);
+      if (G.batch) { geo.translate(cx, cy, cz); (G.batch[mat.uuid] = G.batch[mat.uuid] || { mat, geos: [] }).geos.push(geo); }   // mode "lot" : on fusionne les boîtes d'une même matière (peu d'appels de dessin)
+      else { mesh = new T.Mesh(geo, mat); mesh.position.set(cx, cy, cz); G.scene.add(mesh); }
     }
     if (o.collide !== false) G.addBoxCollider(x0, x1, y0, y1, z0, z1);
     return mesh;
+  };
+  // Lot : entre G.beginBatch() et G.endBatch(), toutes les boîtes (G.B) d'une même matière sont fusionnées en UN seul maillage.
+  G.beginBatch = function () { G.batch = {}; };
+  G.endBatch = function () {
+    const B = G.batch; G.batch = null;
+    for (const k in B) {
+      const { mat, geos } = B[k]; let nv = 0, ni = 0; for (const g of geos) { nv += g.attributes.position.count; ni += g.index.count; }
+      const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), col = new Float32Array(nv * 3), idx = nv > 65000 ? new Uint32Array(ni) : new Uint16Array(ni);
+      let vo = 0, io = 0;
+      for (const g of geos) {
+        pos.set(g.attributes.position.array, vo * 3); nor.set(g.attributes.normal.array, vo * 3); uv.set(g.attributes.uv.array, vo * 2); col.set(g.attributes.color.array, vo * 3);
+        const ix = g.index.array; for (let i = 0; i < ix.length; i++) idx[io + i] = ix[i] + vo;
+        vo += g.attributes.position.count; io += ix.length; g.dispose();
+      }
+      const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('normal', new T.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new T.BufferAttribute(uv, 2)); geo.setAttribute('color', new T.BufferAttribute(col, 3)); geo.setIndex(new T.BufferAttribute(idx, 1));
+      const m = new T.Mesh(geo, mat); m.frustumCulled = false; G.scene.add(m);
+    }
   };
   // Mur avec ouvertures (portes, fenêtres). axis 'z' : épaisseur en z [c0,c1], longueur en x [a0,a1].
   // axis 'x' : épaisseur en x, longueur en z. openings : [a0, a1, y0, y1].

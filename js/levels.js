@@ -66,8 +66,10 @@
   function facade(axis, c, open, a0, a1, feats, o) {
     o = o || {}; const b = -open, f0 = c, f1 = c + b * FR, f2 = c + b * TH, ops = [], gaps = [];
     for (const f of feats) { const y0 = f.y0 || 0, r = [f.a - f.w / 2, f.a + f.w / 2, y0, y0 + f.h]; ops.push(r); if (f.type === 'gap') gaps.push(r); }
-    G.wall(axis, Math.min(f0, f1), Math.max(f0, f1), a0, a1, 0, H, ops, M().facade, { tile: 5 });                  // couche avant (percée de niches)
-    G.wall(axis, Math.min(f1, f2), Math.max(f1, f2), a0, a1, 0, H, gaps, M().concreteDark, { tile: 3 });           // couche arrière (pleine, sauf passages)
+    const lo = Math.min(f0, f2), hi = Math.max(f0, f2), cc = !o.merged;
+    if (o.merged) { if (axis === 'z') G.addBoxCollider(a0, a1, 0, H, lo, hi); else G.addBoxCollider(lo, hi, 0, H, a0, a1); }      // un seul bloc de collision pour tout le segment
+    G.wall(axis, Math.min(f0, f1), Math.max(f0, f1), a0, a1, 0, H, ops, M().facade, { tile: 5, collide: cc });                  // couche avant (percée de niches)
+    G.wall(axis, Math.min(f1, f2), Math.max(f1, f2), a0, a1, 0, H, gaps, M().concreteDark, { tile: 3, collide: cc });           // couche arrière (pleine, sauf passages)
     const X = boxer(axis, c, open); for (const f of feats) decor(X, f);
     // Crasse : sang, mains, taches, humidité, griffures, fissures, craie (décalcomanies plates sur la face)
     const len = a1 - a0, n = Math.floor(len * (o.dirt === undefined ? 0.55 : o.dirt)), yaw = axis === 'z' ? (open > 0 ? 0 : Math.PI) : (open > 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -190,84 +192,148 @@
   /* ---------------------------------------------------------------
      NIVEAU 1
      --------------------------------------------------------------- */
-  const START = [0.1, 9, 0.9];
+  const START = [8.4, 12, 25.4];
+  /* Plan du niveau 1 (1 caractère = 1 m ; x = colonne, z = ligne). # mur · . libre · = passage couvert · T/D tour · G grille · lettres = repères sur sol libre */
+  const MAP = [
+    '################################################################',
+    '################################################################',
+    '################################################################',
+    '#####################################GG#########################',
+    '#####################################..#########################',
+    '#####################################..#########################',
+    '##################################.........#####################',
+    '##################################.........#####################',
+    '####################................c..........W.###############',
+    '######..############.......##.........X..........###############',
+    '######L.############...##..#######....F....#####################',
+    '######..############.c.##..#######.......c.#####################',
+    '######..############...##..#######.........#####################',
+    '######..############...##..###########..########################',
+    '######..############...##B.###########..########################',
+    '###.........########...##..###########..########################',
+    '###..c....F.########...###############..#################.....##',
+    '###.......c...........################..#################.....##',
+    '###.....X......c......################..#################.....##',
+    '###...................################.......c.......====.N...##',
+    '###.B....c..##########################...c...........====.....##',
+    '###.........#############################################.....##',
+    '###TTTTDTTTT#############################################.....##',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '################################################################',
+    '################################################################',
+    '################################################################',
+    '################################################################'
+  ];
+  const FREE = '.=BLWFcXN';
+  const cell = (c, r) => (r >= 0 && r < MAP.length && c >= 0 && c < MAP[0].length) ? MAP[r][c] : '#';
+  G.placeStart = function () { const P = G.P; P.pos.set(START[0], START[1], START[2]); P.safe.set(START[0], START[1], START[2]); P.yaw = 0; P.pitch = 0; P.eye = START[1] + 1.62; };
+
+  // Décor automatique d'une face de mur : fenêtres sur 3 étages, une porte / un rideau de fer / une fenêtre condamnée au sol
+  function featsFor(L, covered, special) {
+    const f = [];
+    if (special) return special;
+    if (covered || L < 2.2) return f;
+    for (const y0 of [4.2, 7.4, 10.6]) for (let a = 1.3; a < L - 1.0; a += 3.2 + rnd() * 1.2) if (rnd() < 0.72) f.push({ type: 'window', a, w: 1.0, h: 1.4, y0, lit: rnd() < 0.1, boards: rnd() < 0.2 });
+    if (L >= 5.5) {
+      const n = L >= 12 ? 2 : 1; let last = -9;
+      for (let k = 0; k < n; k++) {
+        if (rnd() < 0.2) continue;
+        const kind = rnd(), w = kind < 0.35 ? 1.3 : kind < 0.75 ? 3.2 : 1.0, a = 1.8 + (L - 3.6) * (n === 1 ? rnd() : (k + rnd() * 0.5) / n);
+        if (a - w / 2 < 0.9 || a + w / 2 > L - 0.9 || Math.abs(a - last) < 4) continue; last = a;
+        const sg = rnd() < 0.5 ? G.dress.SIGNS[Math.floor(rnd() * G.dress.SIGNS.length)] : null;
+        if (kind < 0.35) f.push({ type: 'door', a, w: 1.3, h: 2.4, sign: sg }); else if (kind < 0.75) f.push({ type: 'garage', a, w: 3.2, h: 2.7, closed: rnd() < 0.6, sign: sg }); else f.push({ type: 'window', a, w: 1.0, h: 1.0, y0: 1.5, boards: true });
+      }
+    }
+    return f;
+  }
+
   G.buildLevel1 = function () {
-    const m = mats();
-    G.have = []; G.objective = 'La clé USB est près du lit. Prends-la, puis descends.';
-    G.isPlayable = null;                                                                  // filet de la grande carte : inutile ici (il te renvoyait dans la tour)
-    G.B(-24, 72, -1, 0, -44, 14, M().asphalt, { tile: 3, grime: false });                                    // sol
-    const sign = (i) => G.dress.SIGNS[i];
-
-    // ---- Façades : tout est droit, à angles droits ----
-    // Côté tour (sud de la cour)
-    facade('z', -2.65, -1, -12, -2.1, [
-      { type: 'garage', a: -8.6, w: 3.4, h: 2.7, closed: false, sign: sign(5) }, { type: 'window', a: -4.4, w: 1.0, h: 1.0, y0: 1.5, boards: true },
-      ...[-10.8, -8.4, -6, -3.6].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2, lit: rnd() < 0.15 })), ...[-10.8, -6, -3.6].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4 }))], { clear: [-8.6, -4.4] });
-    facade('z', -2.65, -1, 2.1, 12, [
-      { type: 'door', a: 6.2, w: 1.3, h: 2.4, sign: sign(9) }, { type: 'garage', a: 10.3, w: 2.2, h: 2.5, closed: true },
-      ...[3.6, 6, 8.4, 10.8].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2, lit: rnd() < 0.2 })), ...[3.6, 8.4, 10.8].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, boards: rnd() < 0.4 }))], { clear: [6.2, 10.3] });
-    // Cour : ouest, nord, est (avec le passage vers la ruelle)
-    facade('x', -12, 1, -26.6, -2.05, [
-      { type: 'garage', a: -9.5, w: 3.6, h: 2.8, closed: true, sign: sign(2) }, { type: 'door', a: -17, w: 1.3, h: 2.4 }, { type: 'window', a: -21.5, w: 1.0, h: 1.0, y0: 1.5, boards: true },
-      ...[-5, -9.5, -13.5, -17, -21, -24].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[-5, -13.5, -21].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, lit: rnd() < 0.3 }))], { clear: [-9.5, -17] });
-    facade('z', -26, 1, -12, 12, [
-      { type: 'garage', a: -6.5, w: 4.0, h: 2.6, closed: true, sign: sign(6) }, { type: 'door', a: 1, w: 1.3, h: 2.4 }, { type: 'garage', a: 7.5, w: 3.0, h: 2.6, closed: false },
-      ...[-10, -3.5, 4, 10].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[-10, -6.5, -3.5, 4, 10].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, lit: rnd() < 0.2 }))], { clear: [-6.5, 1, 7.5] });
-    facade('x', 12, -1, -26.6, -2.05, [
-      { type: 'gap', a: -13, w: 6, h: 4 }, { type: 'door', a: -22, w: 1.3, h: 2.4 }, { type: 'window', a: -5, w: 1.0, h: 1.0, y0: 1.5 },
-      ...[-5, -9, -17, -21, -24].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[-5, -9, -17, -24].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4 }))]);
-    // Ruelle
-    facade('z', -17, 1, 12, 50, [
-      { type: 'garage', a: 18.5, w: 3.4, h: 2.7, closed: false, sign: sign(0) }, { type: 'door', a: 29, w: 1.3, h: 2.4, sign: sign(7) }, { type: 'garage', a: 40, w: 3.6, h: 2.7, closed: true, sign: sign(1) }, { type: 'window', a: 46, w: 1.0, h: 1.0, y0: 1.5, boards: true },
-      ...[15, 22, 25, 33, 36, 43].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[15, 22, 25, 33, 36, 43, 47].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, lit: rnd() < 0.2 }))], { clear: [18.5, 29, 40] });
-    facade('z', -9, -1, 12, 50, [
-      { type: 'garage', a: 25, w: 4.4, h: 3.0, closed: false, sign: sign(4) }, { type: 'door', a: 36, w: 1.3, h: 2.4 }, { type: 'window', a: 16, w: 1.0, h: 1.0, y0: 1.5 },
-      ...[15, 20, 30, 33, 40, 44, 47].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[15, 20, 30, 40, 47].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, boards: rnd() < 0.3 }))], { clear: [25, 36] });
-    // Place du contact
-    facade('x', 50, 1, -19.6, -17, []); facade('x', 50, 1, -9, -6.4, []);
-    facade('z', -19, 1, 49.4, 60, [{ type: 'garage', a: 55, w: 3.4, h: 2.6, closed: true }, ...[52, 56.5, 58.8].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[52, 56.5].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4 }))], { clear: [55] });
-    facade('z', -7, -1, 49.4, 60, [{ type: 'door', a: 52.5, w: 1.3, h: 2.4 }, ...[52.5, 55.5, 58.4].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), { type: 'window', a: 56.5, w: 1.0, h: 1.0, y0: 1.5, boards: true }], { clear: [52.5] });
-    facade('x', 60, -1, -19.6, -6.4, [{ type: 'door', a: -13, w: 1.6, h: 2.5, sign: sign(8) }, ...[-17, -9.5].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[-17, -13, -9.5].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, lit: a === -13 }))], { clear: [-13] });
-
-    // ---- Lumières : peu de lampes, certaines mortes (le noir sert à se cacher) ----
-    lamp(-3.5, 3.2, -3.1, { I: 0.9 });                                                  // près de la porte de la tour
-    lamp(11.3, 3.4, -7.9, { flicker: 0.6, I: 0.8 }); lamp(11.3, 3.4, -18.2, { broken: true });
-    lamp(22, 3.6, -16.6, { broken: true }); lamp(38, 3.6, -9.6, { flicker: 0.4, I: 0.85 }); lamp(59.4, 3.1, -13, { color: 0xffc070, I: 0.8, dist: 9, halo: 2.4 });
-    fireBarrel(5, -23.4); fireBarrel(28.5, -10.3);                                      // deux îlots de lumière : à éviter ou à contourner
-
-    // ---- Cour : cachettes, couvertures basses, désordre ----
-    makeHide({ type: 'dumpster', x: -11.35, z: -6, front: [1, 0] }); makeHide({ type: 'dumpster', x: 11.35, z: -5, front: [-1, 0] });
-    crate(0, -15, 1.0, 0.9); crate(1.05, -15.5, 1.0, 0.9, 0.3); crate(-1.0, -14.6, 0.9, 0.7, 0.5); lowWall(-7, -5, -19.6, -19); crate(-6, -18.2, 1.0, 0.9); crate(7.5, -20, 1.0, 0.9); crate(8.6, -20.3, 0.9, 0.9, 0.2);
-    // ---- Ruelle ----
-    crate(24, -16.35, 1.0, 0.9); crate(25.05, -16.35, 1.0, 0.9, 0.2); crate(36.5, -16.35, 1.0, 0.9); lowWall(30, 32, -11.6, -11); crate(42.5, -9.6, 1.0, 0.9);
-    makeHide({ type: 'locker', x: 33.5, z: -9.45, front: [0, -1] });
-    // ---- Place ----
-    makeHide({ type: 'tarp', x: 52.6, z: -18.3, front: [0, 1] }); crate(54, -14.5, 1.0, 0.9); crate(55.15, -14.9, 0.9, 0.9, 0.3); lowWall(51, 53, -10.4, -9.8);
-    // ---- Câbles et désordre ----
-    for (const [y, z] of [[6.4, -12], [7.8, -20], [5.8, -5]]) cable([-12, y, z], [12, y + 0.3, z + 0.5], 0.9);
-    for (const x of [18, 30, 44]) cable([x, 6, -17], [x + 1, 6.4, -9], 0.7);
-    clutter([{ x0: -11, x1: 11, z0: -25, z1: -5, n: 90 }, { x0: 13, x1: 49, z0: -16.5, z1: -9.5, n: 70 }, { x0: 51, x1: 59, z0: -18.5, z1: -7.5, n: 30 }]);
+    G.have = []; G.objective = 'La clé USB est sur la table de nuit. Prends-la, puis descends.';
+    G.isPlayable = null;                                                                  // filet de la grande carte : inutile ici
+    G.zoneAt = p => (p.x > 3.3 && p.x < 11.7 && p.z > 22.3 && p.z < 29.7) ? 'in' : 'out';
+    G.beginBatch();
+    G.B(-4, 72, -1, 0, -4, 40, M().asphalt, { tile: 3, grime: false });                  // sol
+    G.buildBuilding();
+    // ---- Murs générés à partir du plan : on cherche les « faces » (cases libres collées à un mur), on les regroupe en segments ----
+    const rowsN = MAP.length, colsN = MAP[0].length, runs = [];
+    const isW = (c, r) => !FREE.includes(cell(c, r)), covered = (c, r) => cell(c, r) === '=';
+    const skipTower = (c, r) => 'TD'.includes(cell(c, r));
+    for (const [dir, dc, dr] of [['N', 0, -1], ['S', 0, 1], ['W', -1, 0], ['E', 1, 0]]) {
+      const alongX = dir === 'N' || dir === 'S', outer = alongX ? rowsN : colsN, inner = alongX ? colsN : rowsN;
+      for (let o = 0; o < outer; o++) {
+        let start = -1, cov = false;
+        for (let i = 0; i <= inner; i++) {
+          const c = alongX ? i : o, r = alongX ? o : i;
+          const face = i < inner && FREE.includes(cell(c, r)) && isW(c + dc, r + dr) && !skipTower(c + dc, r + dr);
+          if (face && start < 0) { start = i; cov = covered(c, r); }
+          if ((!face || (face && covered(c, r) !== cov)) && start >= 0) {
+            runs.push({ dir, o, a0: start, a1: i, cov }); start = face ? i : -1; cov = face ? covered(c, r) : false;
+          }
+        }
+      }
+    }
+    for (const rn of runs) {
+      const L = rn.a1 - rn.a0, axis = (rn.dir === 'N' || rn.dir === 'S') ? 'z' : 'x', open = (rn.dir === 'N' || rn.dir === 'W') ? 1 : -1;
+      const c = rn.dir === 'N' || rn.dir === 'W' ? rn.o : rn.o + 1;
+      let special = null;
+      if (axis === 'x' && c === 62 && rn.a0 <= 16 && rn.a1 >= 22) special = [{ type: 'door', a: 19.5 - rn.a0, w: 1.6, h: 2.5, sign: G.dress.SIGNS[8] }];   // la porte du contact
+      const feats = featsFor(L, rn.cov, special), clear = feats.filter(f => f.type !== 'window').map(f => f.a);
+      facade(axis, c, open, rn.a0, rn.a1, feats.map(f => Object.assign({}, f, { a: rn.a0 + f.a })), { merged: true, clear: clear.map(a => rn.a0 + a), dirt: rn.cov ? 0.3 : 0.5 });
+    }
+    // Plafond du passage couvert (masse pleine au-dessus : on ne voit jamais le ciel) + pincement (ressaut) dans le couloir 3
+    G.B(53, 61, 2.7, 14, 19, 21, M().concreteDark, { grime: false, tile: 3 });
+    G.B(27, 29.2, 0, 14, 9.45, 10.0, M().concreteDark, { tile: 3 });
+    // Grille fermée au bout du cul-de-sac nord de la placette : barreaux + noir derrière
+    G.B(37, 39, 0, 2.8, 3.9, 3.96, mats().dark, { collide: false });
+    for (let a = 37.05; a < 39; a += 0.2) G.B(a, a + 0.04, 0, 2.8, 4.0, 4.05, M().iron, { collide: false, grime: false });
+    G.B(37, 39, 2.7, 2.8, 4.0, 4.07, M().iron, { collide: false, grime: false }); G.B(37, 39, 0.9, 0.97, 4.0, 4.07, M().iron, { collide: false, grime: false });
+    // ---- Lumières : peu de lampes, certaines mortes ----
+    lamp(8.0, 3.2, 21.9, { I: 0.9 });                                                  // sur la porte de l'immeuble
+    lamp(17, 3.4, 17.1, { flicker: 0.5, I: 0.8 }); lamp(20.1, 3.4, 12, { broken: true }); lamp(30, 3.4, 8.1, { flicker: 0.4, I: 0.85 });
+    lamp(42.95, 3.4, 11, { flicker: 0.6, I: 0.8 }); lamp(47, 3.2, 19.1, { broken: true }); lamp(53.5, 2.4, 19.1, { flicker: 0.8, I: 0.4, dist: 6, halo: 1.5 }); lamp(61.9, 3.1, 19.5, { color: 0xffc070, I: 0.8, dist: 9, halo: 2.4 });
+    fireBarrel(10.5, 16.5); fireBarrel(38.5, 10.5);
+    // ---- Cachettes (E), couvertures basses, désordre ----
+    makeHide({ type: 'dumpster', x: 3.6, z: 20.5, front: [1, 0] });                  // cour : benne contre le mur ouest
+    makeHide({ type: 'locker', x: 7.0, z: 9.4, front: [0, 1] });                     // cul-de-sac nord de la cour
+    makeHide({ type: 'dumpster', x: 26.0, z: 15.45, front: [0, -1] });               // cul-de-sac sud du couloir 3
+    makeHide({ type: 'tarp', x: 48.45, z: 9.0, front: [-1, 0] });                    // cul-de-sac est de la placette
+    for (const [x, z, s, h, ry] of [[5.5, 16.5, 1.0, 0.9, 0.2], [6.55, 16.7, 0.9, 0.9, 0.5], [9.5, 20.5, 1.0, 0.9, 0], [8.0, 18.7, 0.9, 0.7, 0.4], [4.8, 18.4, 1.0, 0.9, 0.1], [10.5, 17.5, 0.9, 0.9, 0.3],
+      [15.5, 18.5, 1.0, 0.9, 0.2], [13.2, 17.45, 0.9, 0.9, 0], [21.5, 11.5, 1.0, 0.9, 0.3], [36.5, 8.5, 1.0, 0.9, 0.2], [41.5, 11.5, 1.0, 0.9, 0.4], [45.5, 19.6, 1.0, 0.9, 0], [41.5, 20.4, 0.9, 0.9, 0.3], [24.5, 8.6, 0.9, 0.9, 0.2]]) crate(x, z, s, h, ry);
+    barrel(11.4, 15.5); barrel(3.5, 15.6); barrel(12.8, 19.5); barrel(33.4, 9.4);
+    // ---- Câbles, linge, désordre ----
+    for (const [z, y] of [[17.2, 3.6], [19.6, 3.2], [21.0, 3.9]]) cable([3.1, y, z], [11.9, y - 0.15, z + 0.4], 0.5);
+    for (const x of [15, 18.5, 41]) cable([x, 3.4, 17.1], [x + 1, 3.6, 19.9], 0.5);
+    cable([24, 3.5, 8.1], [32, 3.5, 9.9], 0.6);
+    clutter([{ x0: 3.4, x1: 11.6, z0: 15.2, z1: 21.8, n: 70 }, { x0: 12.2, x1: 21.8, z0: 17.2, z1: 19.8, n: 25 }, { x0: 20.3, x1: 22.7, z0: 8.3, z1: 16.8, n: 20 }, { x0: 23.5, x1: 33.5, z0: 8.2, z1: 9.4, n: 20 }, { x0: 34.2, x1: 42.8, z0: 6.2, z1: 12.8, n: 30 }, { x0: 38.2, x1: 52.8, z0: 19.2, z1: 20.8, n: 25 }, { x0: 57.3, x1: 61.7, z0: 16.3, z1: 22.7, n: 18 }]);
     flushDecals();
+    G.endBatch();
 
-    // ---- Objets : la clé USB (chez nous) ----
-    const usb = new T.Mesh(new T.BoxGeometry(0.05, 0.02, 0.16), new T.MeshPhongMaterial({ color: 0x8c98a4, shininess: 90, specular: 0xffffff })); usb.position.set(-1.0, 9.02, 0.35); usb.rotation.y = 0.6; G.scene.add(usb);
-    const glint = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xdfe8ff, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 })); glint.position.set(-1.0, 9.1, 0.35); glint.scale.set(0.25, 0.25, 1); G.scene.add(glint);
+    // ---- La clé USB (sur la table de nuit, chez nous) ----
+    const [ux, uy, uz] = G.usbSpot;
+    const usb = new T.Mesh(new T.BoxGeometry(0.05, 0.02, 0.16), new T.MeshPhongMaterial({ color: 0x8c98a4, shininess: 90, specular: 0xffffff })); usb.position.set(ux, uy, uz); usb.rotation.y = 0.6; G.scene.add(usb);
+    const glint = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xdfe8ff, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 })); glint.position.set(ux, uy + 0.08, uz); glint.scale.set(0.25, 0.25, 1); G.scene.add(glint);
     G.animated.push({ update() { glint.material.opacity = usb.visible ? 0.14 + 0.1 * Math.sin(performance.now() / 650) : 0; } });
-    const usbItem = { id: 'usb', pos: new T.Vector3(-1.0, 9.1, 0.35), radius: 2.0, prompt: 'Prendre la clé USB',
-      use() { usb.visible = false; G.interactables = G.interactables.filter(i => i !== usbItem); G.have.push('usb-chez-nous'); G.objective = 'Livre la clé au contact, au fond de la ruelle.'; G.say('La clé. Il faut la livrer au contact, au bout de la ruelle. Discret.', 6000); } };
+    const usbItem = { id: 'usb', pos: new T.Vector3(ux, uy + 0.1, uz), radius: 2.0, prompt: 'Prendre la clé USB',
+      use() { usb.visible = false; G.interactables = G.interactables.filter(i => i !== usbItem); G.have.push('usb-chez-nous'); G.objective = 'Livre la clé au contact, au fond des ruelles.'; G.say('La clé. Il faut la livrer au contact, tout au bout. Discret.', 6000); } };
     G.interactables.push(usbItem);
     G.onReset.push(() => { usb.visible = true; if (!G.interactables.includes(usbItem)) G.interactables.push(usbItem); });
 
     // ---- Le contact : devant la porte du fond ----
-    const contact = civilian(); contact.position.set(58.7, 0, -13); contact.rotation.y = -Math.PI / 2; G.scene.add(contact);
-    const rig = contact.userData.rig; G.animated.push({ update() { const t = performance.now() / 1000; rig.torso.scale.y = 1 + Math.sin(t * 1.5) * 0.012; rig.head.rotation.y = Math.sin(t * 0.5) * 0.4; rig['sh1'].rotation.x = -0.2; rig['sh-1'].rotation.x = 0.1; rig['el1'].rotation.x = -0.4; rig['el-1'].rotation.x = -0.3; } });
-    G.interactables.push({ id: 'contact', pos: new T.Vector3(58.3, 1.3, -13), radius: 2.4, prompt: 'Livrer la clé USB',
+    const contact = civilian(); contact.position.set(61.2, 0, 19.5); contact.rotation.y = -Math.PI / 2; G.scene.add(contact);
+    const rig = contact.userData.rig; G.animated.push({ update() { const t = performance.now() / 1000; rig.torso.scale.y = 1 + Math.sin(t * 1.5) * 0.012; rig.head.rotation.y = Math.sin(t * 0.5) * 0.4; } });
+    G.interactables.push({ id: 'contact', pos: new T.Vector3(60.7, 1.3, 19.5), radius: 2.4, prompt: 'Livrer la clé USB',
       use() { if (!G.have.includes('usb-chez-nous')) { G.say('« T\'as rien pour moi. Reviens avec la clé. »', 3500); return; } G.levelComplete(); } });
 
-    // ---- Police : un patrouilleur dans la cour, un garde sur la place ----
-    G.addCop(G.makeCop(), [-8, -14], 0, [[-8, -14], [8, -14]]);
-    G.addCop(G.makeCop(), [55.5, -11.5], -Math.PI / 2 - 0.3, null);
-    G.buildNavGrid(-16, 64, -30, -1, 1);
+    // ---- Police : 2 seulement. Un patrouilleur dans la cour, un garde sur la placette ----
+    G.addCop(G.makeCop(), [5.5, 17.5], 0, [[5.5, 17.5], [9.5, 17.5], [9.5, 20.5], [5.5, 20.5]]);
+    G.addCop(G.makeCop(), [38.5, 9.5], -Math.PI / 2, null);
+    G.buildNavGrid(0, 64, 0, 34, 0.5);
     G.addFogSheets();
   };
 
@@ -350,5 +416,6 @@
     setTimeout(() => { if (G.endLevelScreen) G.endLevelScreen('NIVEAU 1 TERMINÉ', 'la suite arrive · cliquer pour rejouer'); }, 1500);
   };
 
+  G.facade = facade; G.cable = cable;
   G.loaded.push('levels');
 })();

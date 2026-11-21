@@ -4716,11 +4716,30 @@ G.loaded.push('gltf');
     const w = x1 - x0, h = y1 - y0, d = z1 - z0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
     let mesh = null;
     if (!o.nomesh) {
-      mesh = new T.Mesh(boxGeo(w, h, d, cx, cy, cz, o.tile || 2.5, o.grime !== false, o.grimeBase !== undefined ? o.grimeBase : y0), mat);
-      mesh.position.set(cx, cy, cz); G.scene.add(mesh);
+      const geo = boxGeo(w, h, d, cx, cy, cz, o.tile || 2.5, o.grime !== false, o.grimeBase !== undefined ? o.grimeBase : y0);
+      if (G.batch) { geo.translate(cx, cy, cz); (G.batch[mat.uuid] = G.batch[mat.uuid] || { mat, geos: [] }).geos.push(geo); }   // mode "lot" : on fusionne les boîtes d'une même matière (peu d'appels de dessin)
+      else { mesh = new T.Mesh(geo, mat); mesh.position.set(cx, cy, cz); G.scene.add(mesh); }
     }
     if (o.collide !== false) G.addBoxCollider(x0, x1, y0, y1, z0, z1);
     return mesh;
+  };
+  // Lot : entre G.beginBatch() et G.endBatch(), toutes les boîtes (G.B) d'une même matière sont fusionnées en UN seul maillage.
+  G.beginBatch = function () { G.batch = {}; };
+  G.endBatch = function () {
+    const B = G.batch; G.batch = null;
+    for (const k in B) {
+      const { mat, geos } = B[k]; let nv = 0, ni = 0; for (const g of geos) { nv += g.attributes.position.count; ni += g.index.count; }
+      const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), col = new Float32Array(nv * 3), idx = nv > 65000 ? new Uint32Array(ni) : new Uint16Array(ni);
+      let vo = 0, io = 0;
+      for (const g of geos) {
+        pos.set(g.attributes.position.array, vo * 3); nor.set(g.attributes.normal.array, vo * 3); uv.set(g.attributes.uv.array, vo * 2); col.set(g.attributes.color.array, vo * 3);
+        const ix = g.index.array; for (let i = 0; i < ix.length; i++) idx[io + i] = ix[i] + vo;
+        vo += g.attributes.position.count; io += ix.length; g.dispose();
+      }
+      const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('normal', new T.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new T.BufferAttribute(uv, 2)); geo.setAttribute('color', new T.BufferAttribute(col, 3)); geo.setIndex(new T.BufferAttribute(idx, 1));
+      const m = new T.Mesh(geo, mat); m.frustumCulled = false; G.scene.add(m);
+    }
   };
   // Mur avec ouvertures (portes, fenêtres). axis 'z' : épaisseur en z [c0,c1], longueur en x [a0,a1].
   // axis 'x' : épaisseur en x, longueur en z. openings : [a0, a1, y0, y1].
@@ -5193,7 +5212,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     try {
       let buf = null;
       if (window.COP_GLB_B64) { const bin = atob(window.COP_GLB_B64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); buf = u.buffer; }
-      else { const r = await fetch('assets/models/cop.glb'); if (!r.ok) return; buf = await r.arrayBuffer(); }
+      else { if (location.protocol === 'file:') return; const r = await fetch('assets/models/cop.glb'); if (!r.ok) return; buf = await r.arrayBuffer(); }
       const gltf = await new Promise((ok, ko) => new T.GLTFLoader().parse(buf, '', ok, ko));
       const probe = analyse(gltf.scene.clone(true));      // essai : il faut au moins les os principaux
       if (!probe) { console.warn('[cop.glb] os non reconnus : corps fait main conservé'); return; }
@@ -5906,7 +5925,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const range = 20 * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
     const dot = dist > 0.01 ? (dx * Math.sin(c.facing) + dz * Math.cos(c.facing)) / dist : 1;
     const e = [P.pos.x, P.pos.y + (crouched ? 0.7 : 1.2), P.pos.z];
-    const sees = !G.arrest && !hidden && dist < range && (dist < 3 || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));
+    const sees = !G.arrest && !hidden && dist < range && (dist < (crouched ? 1.8 : 3) || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));
     const noise = P.mode === 'slide' || P.dashT > 0 ? 12 : P.sprint ? 8 : P.mode === 'wallrun' ? 9 : (P.speed > 1 && P.h > 1.5) ? 3 : 1;
     const hears = !G.arrest && !hidden && !sees && dist < noise && Math.abs(P.pos.y - c.y) < 3;
     if (sees) { c.alert = Math.min(1.5, c.alert + dt * (0.9 + (1 - dist / range) * 1.6)); c.last = [P.pos.x, P.pos.z]; c.lostT = 0; }
@@ -6108,6 +6127,165 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
 
 </script>
 <script>
+/* ---- js/building.js ---- */
+/* =====================================================================
+   building.js : l'IMMEUBLE du niveau 1 (coordonnées du plan : x 3..12, z 22..30, porte au nord sur la cour).
+   Rez-de-chaussée (hall) + 3 étages de voisins (portes seulement) + l'appartement tout en haut (y = 12) = la chambre de Neo (Matrix).
+   Escalier carré à volées droites, paliers distincts, garde-corps de fer. Tout en boîtes ; les petits objets sont fusionnés (G.beginBatch).
+   ===================================================================== */
+(function () {
+  'use strict';
+  const G = window.G, T = G.T, M = () => G.mat, rnd = () => G.rnd();
+  const X0 = 3, X1 = 12, Z0 = 22, Z1 = 30, WT = 0.3, PX0 = 6.9, PX1 = 7.2, ROOF = 15, AY = 12;
+  const RISE = 0.1875, RUN = 0.275;
+  const ph = (c, s, sp) => new T.MeshPhongMaterial({ color: c, shininess: s === undefined ? 4 : s, specular: sp === undefined ? 0x111111 : sp });
+  const box = (x0, x1, y0, y1, z0, z1, mat, o) => G.B(x0, x1, y0, y1, z0, z1, mat, Object.assign({ grime: false }, o || {}));
+  const mesh = (geo, mat, x, y, z, ry) => { const q = new T.Mesh(geo, mat); q.position.set(x, y, z); if (ry) q.rotation.y = ry; G.scene.add(q); return q; };
+
+  G.buildBuilding = function () {
+    const C = M().concrete, CD = M().concreteDark, IRON = M().iron;
+    // ---------- Coque ----------
+    box(X0, X0 + WT, 0, ROOF + 0.3, Z0, Z1, C, { grime: true }); box(X1 - WT, X1, 0, ROOF + 0.3, Z0, Z1, C, { grime: true }); box(X0, X1, 0, ROOF + 0.3, Z1 - WT, Z1, C, { grime: true });
+    box(X0, X1, ROOF, ROOF + 0.3, Z0, Z1, CD);                                                       // toit
+    // Façade nord (sur la cour) : porte du hall, fenêtre de l'appartement, fenêtres de paliers et de voisins
+    const north = [[7.45, 8.55, 0, 2.4], [8.0, 9.6, AY + 1.3, AY + 2.6]];
+    for (const yf of [3, 6, 9, 12]) north.push([4.2, 5.4, yf + 1.0, yf + 2.3]);
+    for (const yf of [3, 6, 9]) { north.push([8.7, 9.9, yf + 1.2, yf + 2.4]); north.push([10.4, 11.4, yf + 1.2, yf + 2.4]); }
+    G.wall('z', Z0, Z0 + WT, X0, X1, 0, ROOF + 0.3, north, C, { grime: true, collide: true });
+    const glass = ph(0x07100f, 100, 0x8aa0b0);
+    for (const o of north.slice(1)) { box(o[0], o[1], o[2], o[3], Z0 + 0.12, Z0 + 0.16, glass, { collide: false }); for (let a = o[0] + 0.3; a < o[1] - 0.1; a += 0.3) box(a, a + 0.03, o[2], o[3], Z0 + 0.05, Z0 + 0.08, IRON, { collide: false }); }   // vitres + barreaux
+    for (const o of north.slice(1)) { box(o[0] - 0.05, o[1] + 0.05, o[2] - 0.05, o[2], Z0 - 0.04, Z0 + 0.1, CD, { collide: false }); }                                          // appui de fenêtre
+    // Porte du hall : encadrement et vantail ouvert vers l'intérieur (on voit le noir derrière)
+    box(7.4, 7.45, 0, 2.45, Z0 - 0.03, Z0 + 0.3, IRON, { collide: false }); box(8.55, 8.6, 0, 2.45, Z0 - 0.03, Z0 + 0.3, IRON, { collide: false }); box(7.4, 8.6, 2.4, 2.45, Z0 - 0.03, Z0 + 0.3, IRON, { collide: false });
+    // ---------- Cloison entre l'escalier (x < 6.9) et le reste ----------
+    const part = [[23.2, 25.0, 0, 2.3], [23.0, 24.1, AY, AY + 2.2]];                                 // hall -> escalier ; appartement -> palier
+    for (const yf of [3, 6, 9]) { part.push([22.8, 23.8, yf, yf + 2.15]); part.push([24.4, 25.4, yf, yf + 2.15]); }   // portes de voisins
+    G.wall('x', PX0, PX1, Z0 + WT, Z1 - WT, 0, ROOF, part, M().wall, { grime: true });
+    // portes de voisins : vantail en retrait + plaque de numéro côté escalier
+    const doorMat = ph(0x2a2c2b, 12), frame = ph(0x151716, 6);
+    const nums = { 3: ['11', '12'], 6: ['21', '22'], 9: ['31', '32'] };
+    for (const yf of [3, 6, 9]) [[22.8, 23.8, 0], [24.4, 25.4, 1]].forEach(([a, b, k]) => {
+      box(PX0 + 0.08, PX0 + 0.16, yf, yf + 2.1, a + 0.05, b - 0.05, doorMat, { collide: false });
+      box(PX0 - 0.02, PX0 + 0.1, yf, yf + 2.17, a - 0.06, a, frame, { collide: false }); box(PX0 - 0.02, PX0 + 0.1, yf, yf + 2.17, b, b + 0.06, frame, { collide: false }); box(PX0 - 0.02, PX0 + 0.1, yf + 2.15, yf + 2.2, a - 0.06, b + 0.06, frame, { collide: false });
+      box(PX0 + 0.04, PX0 + 0.09, yf + 1.55, yf + 1.7, (a + b) / 2 - 0.1, (a + b) / 2 + 0.1, ph(0x8a8d86, 30), { collide: false });                 // plaque
+      box(PX0 + 0.04, PX0 + 0.09, yf + 1.05, yf + 1.12, b - 0.25, b - 0.12, ph(0x6a6d70, 60), { collide: false });                                  // poignée
+      const t = new T.Mesh(new T.PlaneGeometry(0.17, 0.11), new T.MeshBasicMaterial({ map: G.dress.signTex(nums[yf][k], '#4a4d48') })); t.position.set(PX0 + 0.035, yf + 1.625, (a + b) / 2); t.rotation.y = -Math.PI / 2; G.scene.add(t);   // PX0 < joueur : la plaque regarde -x
+      if (yf === 6 && k === 1) box(PX0 + 0.05, PX0 + 0.08, yf + 1.75, yf + 2.0, a + 0.1, b - 0.1, ph(0x1a1410, 2), { collide: false });         // un papier collé sur la porte condamnée
+    });
+    // porte de l'appartement : cadre + vantail ouvert à 80°
+    box(PX0 - 0.02, PX1 + 0.02, AY, AY + 2.25, 22.94, 23.0, frame, { collide: false }); box(PX0 - 0.02, PX1 + 0.02, AY, AY + 2.25, 24.1, 24.16, frame, { collide: false }); box(PX0 - 0.02, PX1 + 0.02, AY + 2.2, AY + 2.27, 22.94, 24.16, frame, { collide: false });
+    // ---------- Masse pleine des voisins (de y=3 à l'appartement) ; sol parqué de l'appartement ----------
+    box(PX1, X1 - WT, 3, AY - 0.1, Z0 + WT, Z1 - WT, CD);
+    box(PX1, X1 - WT, AY - 0.1, AY, Z0 + WT, Z1 - WT, M().floor, { tile: 2 });
+    // ---------- Escalier : 4 volées de 2x8 marches ----------
+    box(3.3, PX0, -0.3, 0, Z0 + WT, Z1 - WT, CD);                                                      // sol du rez (escalier)
+    box(PX1, X1 - WT, -0.3, 0, Z0 + WT, Z1 - WT, M().floor, { tile: 2 });                              // sol du hall
+    for (const yf of [AY, 9, 6, 3]) {
+      box(3.3, PX0, yf - 0.3, yf, Z0 + WT, 25.9, CD);                                                  // palier d'étage (carré, côté cour)
+      box(3.3, PX0, yf - 1.8, yf - 1.5, 28.1, Z1 - WT, CD);                                            // demi-palier (côté fond)
+      for (let i = 1; i <= 8; i++) { const top = yf - RISE * i, z0 = 25.9 + (i - 1) * RUN; box(5.2, PX0, top - 0.3, top, z0, z0 + RUN, CD); }   // volée est : on descend vers le sud
+      for (let j = 1; j <= 8; j++) { const top = yf - 1.5 - RISE * j, z1 = 28.1 - (j - 1) * RUN; box(3.3, 5.0, top - 0.3, top, z1 - RUN, z1, CD); }   // volée ouest : on remonte vers le nord
+      // Garde-corps : seulement au dernier étage, devant le vide de la cage (collision) ; ailleurs la volée du haut arrive sur le palier
+      if (yf === AY) {
+        box(3.3, 5.2, yf, yf + 1.05, 25.84, 25.9, IRON, { collide: true });
+        for (let a = 3.4; a < 5.2; a += 0.45) box(a, a + 0.04, yf, yf + 1.05, 25.8, 25.94, IRON, { collide: false });
+        box(3.3, 5.2, yf + 0.98, yf + 1.04, 25.8, 25.94, IRON, { collide: false });
+      }
+      for (const [xr, sgn] of [[5.2, 1], [5.0, -1]]) {                                                  // mains courantes inclinées le long de la cage ouverte (visuelles)
+        const y0 = sgn === 1 ? yf : yf - 1.5, y1 = sgn === 1 ? yf - 1.5 : yf - 3, zA = sgn === 1 ? 25.9 : 28.1, zB = sgn === 1 ? 28.1 : 25.9;
+        const len = Math.hypot(2.2, y1 - y0), xx = xr + (sgn === 1 ? 0.03 : -0.03), rail = mesh(new T.BoxGeometry(0.05, 0.05, len), IRON, xx, (y0 + y1) / 2 + 0.95, (zA + zB) / 2);
+        rail.rotation.x = Math.atan2(-(y1 - y0), (zB - zA));
+        for (let k = 0; k <= 4; k++) { const t = k / 4; mesh(new T.BoxGeometry(0.04, 0.95, 0.04), IRON, xx, y0 + (y1 - y0) * t + 0.47, zA + (zB - zA) * t); }
+      }
+    }
+    // ---------- Lumières : une ambiance différente à chaque étage ----------
+    G.addLamp({ x: 9.4, y: 2.7, z: 25.5, color: 0xb9c8a0, I: 1.0, dist: 8, flicker: 0.3, halo: 0.9 });                         // hall
+    G.addLamp({ x: 4.9, y: 0 + 2.7, z: 24.0, color: 0xcfd8a0, I: 0.8, dist: 7, flicker: 0.25, halo: 0.8 });                    // palier rez
+    G.addLamp({ x: 4.9, y: 3 + 2.7, z: 24.0, color: 0xffc080, I: 1.0, dist: 8, flicker: 0.1, halo: 1.0 });                      // étage 1 : ampoule nue chaude
+    G.addLamp({ x: 4.9, y: 6 + 2.7, z: 24.0, color: 0xcfd8a0, I: 0.0, dist: 8, flicker: 0, halo: 0 });                          // étage 2 : lampe morte (noir)
+    G.addLamp({ x: 4.9, y: 9 + 2.7, z: 24.0, color: 0x9fffd0, I: 1.0, dist: 8, flicker: 0.9, halo: 1.1 });                      // étage 3 : néon vert qui grésille
+    G.addLamp({ x: 4.9, y: AY + 2.7, z: 24.0, color: 0xcfd8a0, I: 0.5, dist: 7, flicker: 0.4, halo: 0.6 });                     // palier de l'appartement
+    // Hall : boîtes aux lettres, vélo cassé, sacs
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 2; j++) box(X1 - WT - 0.14, X1 - WT, 1.0 + j * 0.3, 1.0 + j * 0.3 + 0.26, 24.2 + i * 0.4, 24.2 + i * 0.4 + 0.34, ph(0x2b3033, 20), { collide: false });
+    for (const [x, z, s] of [[8.5, 27.6, 0.5], [9.2, 28.2, 0.4], [10.4, 28.8, 0.45]]) { const q = mesh(new T.SphereGeometry(s, 8, 6), ph(0x0c0e0c, 2), x, s * 0.5, z); q.scale.y = 0.65; }
+    G.buildApartment();
+  };
+
+  /* ---------- LA CHAMBRE DE NEO ---------- */
+  G.buildApartment = function () {
+    const X = 7.2, XE = 11.7, ZN = 22.3, ZS = 29.7, F = AY, CEIL = ROOF, IRON = M().iron;
+    const green = ph(0x4a5c47, 3, 0x0a0f0a); green.map = null;
+    // Revêtement vert sale des murs de la pièce (fines dalles contre la coque) ; fenêtre et porte laissées ouvertes
+    G.wall('z', ZN, ZN + 0.03, X, XE, F, CEIL, [[8.0, 9.6, F + 1.3, F + 2.6]], green, { collide: false });
+    G.wall('z', ZS - 0.03, ZS, X, XE, F, CEIL, [], green, { collide: false });
+    G.wall('x', XE - 0.03, XE, ZN, ZS, F, CEIL, [], green, { collide: false });
+    G.wall('x', X, X + 0.03, ZN, ZS, F, CEIL, [[23.0, 24.1, F, F + 2.2]], green, { collide: false });
+    box(X, XE, CEIL - 0.04, CEIL, ZN, ZS, ph(0x2c342c, 2), { collide: false });                          // plafond
+    const beige = ph(0x9a9684, 14, 0x222222), beigeD = ph(0x7d7a6b, 10), plastic = ph(0x2a2c2a, 20), wood = ph(0x3a3025, 6), metalG = ph(0x3f5240, 14), cloth = M().cloth, cloth2 = M().cloth2;
+    // --- Lit défait sous la fenêtre ---
+    box(7.45, 8.6, F, F + 0.3, 22.45, 24.8, ph(0x241d16, 4));                                             // cadre
+    box(7.5, 8.55, F + 0.3, F + 0.46, 22.5, 24.75, cloth, { tile: 1 });                                   // matelas
+    box(7.55, 8.05, F + 0.46, F + 0.6, 22.55, 23.15, cloth2, { collide: false, tile: 1 }); box(8.05, 8.55, F + 0.46, F + 0.58, 22.6, 23.2, cloth2, { collide: false, tile: 1 });   // oreillers
+    for (const [x, z, sx, sz, rot] of [[8.0, 23.9, 0.9, 0.8, 0.25], [7.9, 24.4, 0.7, 0.6, -0.3], [8.3, 23.6, 0.5, 0.7, 0.5]]) { const q = mesh(new T.BoxGeometry(sx, 0.14, sz), cloth, x, F + 0.53, z, rot); q.rotation.z = 0.08; }   // draps en tas
+    // --- Table de nuit + clé USB + lampe rouge ---
+    box(8.8, 9.35, F, F + 0.55, 22.45, 23.0, wood);
+    // --- Étagère de livres (contre la cloison) ---
+    box(X + 0.02, X + 0.4, F, F + 2.1, 26.4, 29.4, ph(0x2b2218, 4));
+    for (let k = 0; k < 4; k++) for (let b = 0; b < 12; b++) { const h = 0.2 + rnd() * 0.12; box(X + 0.1, X + 0.38, F + 0.2 + k * 0.5, F + 0.2 + k * 0.5 + h, 26.5 + b * 0.24, 26.5 + b * 0.24 + 0.16, ph([0x4a3a2a, 0x2c3a46, 0x3a2c2c, 0x44463a][Math.floor(rnd() * 4)], 2), { collide: false }); }
+    // --- Placard vert + micro-ondes (coin nord-est) ---
+    box(10.85, XE - 0.03, F, F + 1.05, ZN + 0.03, 24.0, metalG); box(10.95, XE - 0.1, F + 1.05, F + 1.4, ZN + 0.1, 23.6, ph(0x1a1d1a, 20, 0x334433), { collide: false }); box(10.97, 11.15, F + 1.12, F + 1.34, 23.2, 23.55, ph(0x0a0c0a, 40, 0x445544), { collide: false });
+    // --- Bureau en L (jambe est + jambe sud), plateau à 0,74 m ---
+    const TOP = F + 0.74, topM = ph(0x3d352a, 6);
+    box(10.75, XE - 0.03, TOP - 0.05, TOP, 24.4, ZS - 0.03, topM, { collide: true }); box(8.1, 10.75, TOP - 0.05, TOP, 28.75, ZS - 0.03, topM, { collide: true });
+    for (const [x, z] of [[10.8, 24.45], [11.6, 24.45], [10.8, 28.7], [8.15, 28.8], [8.15, 29.6], [11.6, 29.6]]) box(x - 0.025, x + 0.025, F, TOP - 0.05, z - 0.025, z + 0.025, IRON, { collide: false });
+    box(10.9, XE - 0.1, F + 0.1, F + 0.7, 26.0, 28.4, ph(0x232522, 6), { collide: false });             // caisson sous le bureau
+    // Moniteurs CRT : un allumé (neige verte), deux éteints empilés ; claviers ; imprimante ; tours d'ordinateur
+    const crt = (x, z, ry, y, on) => { const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = ry;
+      const b1 = new T.Mesh(new T.BoxGeometry(0.46, 0.42, 0.44), beige); b1.position.set(0, 0.21, 0); g.add(b1); const b2 = new T.Mesh(new T.BoxGeometry(0.36, 0.3, 0.2), beigeD); b2.position.set(0, 0.21, -0.3); g.add(b2);
+      const sc = new T.Mesh(new T.PlaneGeometry(0.33, 0.26), on ? new T.MeshBasicMaterial({ map: G.crtStat.texture }) : ph(0x0a100c, 90, 0x8aa0a0)); sc.position.set(0, 0.23, 0.221); g.add(sc); G.scene.add(g); return g; };
+    G.crtStat = G.makeStatic();
+    crt(11.05, 27.2, -Math.PI / 2, TOP, true); crt(9.2, 29.05, Math.PI, TOP, false); crt(9.2, 29.05, Math.PI + 0.2, TOP + 0.42, false); crt(8.7, 29.1, Math.PI - 0.1, TOP, false);
+    G.animated.push({ t: 0, update(dt) { this.t += dt; if (this.t > 0.07) { this.t = 0; G.crtStat.update(performance.now() / 1000); } } });
+    G.addLamp({ x: 10.5, y: TOP + 0.4, z: 27.2, color: 0x7dffb0, I: 1.1, dist: 7, flicker: 0.25, halo: 0.8, bulb: false });          // lueur verte de l'écran
+    for (const [x, z, sx, sz] of [[10.95, 25.5, 0.2, 0.45], [10.95, 26.1, 0.2, 0.45]]) box(x - sx / 2, x + sx / 2, TOP, TOP + 0.04, z - sz / 2, z + sz / 2, ph(0x8a8776, 8), { collide: false });   // claviers
+    box(10.9, 11.5, TOP, TOP + 0.2, 24.5, 25.0, beigeD, { collide: false });                                                                                                                      // imprimante
+    for (const [x, z, h] of [[10.2, 29.1, 0.5], [9.75, 28.95, 0.45], [11.3, 29.3, 0.45]]) box(x - 0.1, x + 0.1, F, F + h, z - 0.22, z + 0.22, beige, { collide: false });                          // tours posées au sol
+    for (const [x, z] of [[8.9, 28.1], [9.3, 28.45], [8.6, 27.6]]) box(x - 0.2, x + 0.2, F, F + 0.4, z - 0.17, z + 0.17, beigeD, { collide: false });                                              // boîtiers ouverts
+    // Lampe d'architecte rouge (coin du bureau) : tige, tête, lueur rouge
+    const lampRed = ph(0x6a1a14, 20), head = mesh(new T.CylinderGeometry(0.03, 0.08, 0.14, 10), lampRed, 11.3, TOP + 0.55, 25.3); head.rotation.z = 0.5;
+    mesh(new T.CylinderGeometry(0.008, 0.008, 0.5, 5), IRON, 11.4, TOP + 0.28, 25.2); G.addLamp({ x: 11.2, y: TOP + 0.5, z: 25.3, color: 0xff4030, I: 0.45, dist: 3.5, halo: 0.4, bulb: false });
+    // Chaise de bureau (légèrement tournée), tasses, CD, papiers, téléphone
+    const ch = new T.Group(); ch.position.set(9.9, F, 27.3); ch.rotation.y = 0.7; G.scene.add(ch);
+    const seat = new T.Mesh(new T.BoxGeometry(0.46, 0.07, 0.46), ph(0x24282a, 4)); seat.position.y = 0.5; ch.add(seat); const back = new T.Mesh(new T.BoxGeometry(0.44, 0.5, 0.06), ph(0x24282a, 4)); back.position.set(0, 0.78, -0.22); back.rotation.x = -0.12; ch.add(back);
+    const post = new T.Mesh(new T.CylinderGeometry(0.03, 0.03, 0.45, 6), IRON); post.position.y = 0.25; ch.add(post); for (let k = 0; k < 5; k++) { const a = k * 1.2566; const leg = new T.Mesh(new T.BoxGeometry(0.05, 0.03, 0.3), IRON); leg.position.set(Math.sin(a) * 0.15, 0.03, Math.cos(a) * 0.15); leg.rotation.y = a; ch.add(leg); }
+    const cup = (x, z) => mesh(new T.CylinderGeometry(0.04, 0.032, 0.09, 8), ph(0x9a9a92, 20), x, TOP + 0.045, z);
+    cup(11.0, 28.2); cup(10.5, 28.95); cup(9.9, 29.4);
+    for (const [x, z] of [[10.4, 29.0], [9.0, 29.3], [11.3, 25.9], [11.4, 26.7]]) { const cd = mesh(new T.CylinderGeometry(0.06, 0.06, 0.004, 14), ph(0xb8bcc0, 90, 0xffffff), x, TOP + 0.01, z); }
+    for (const [x, z, r] of [[10.2, 28.9, 0.3], [11.35, 27.9, 0.1], [8.5, 29.3, 0.5], [11.4, 24.9, 0]]) { box(x - 0.14, x + 0.14, TOP, TOP + 0.03 + rnd() * 0.04, z - 0.1, z + 0.1, ph(0x908c80, 2), { collide: false }); }
+    box(8.9, 9.2, TOP, TOP + 0.08, 28.85, 29.05, ph(0x1a1c1a, 30), { collide: false });                    // téléphone
+    // Sol : tas de câbles, boîtes, papiers, cartons (instanciés, pas chers)
+    const cables = G.cable;
+    if (cables) {
+      for (let k = 0; k < 16; k++) { const x = 8.0 + rnd() * 3.2, z = 26.5 + rnd() * 3, a = rnd() * 6.28; cables([x, F + 0.03, z], [x + Math.cos(a) * (0.8 + rnd()), F + 0.03, z + Math.sin(a) * (0.8 + rnd())], -0.02, 0.014); }
+      for (let k = 0; k < 8; k++) { const x = 10.5 + rnd() * 1.0, y = 14.9; cables([x, y, 22.8 + rnd() * 6], [x + (rnd() - 0.5) * 1.0, F + 0.9 + rnd() * 1.0, 25 + rnd() * 4], 0.7, 0.014); }   // câbles qui pendent du plafond
+      cables([7.8, CEIL - 0.1, 25.0], [9.5, CEIL - 0.1, 28.0], 0.35, 0.02);
+    }
+    for (let k = 0; k < 34; k++) { const x = 7.5 + rnd() * 4.0, z = 24.9 + rnd() * 4.5, s = 0.1 + rnd() * 0.2; if (x > 7.8 && x < 8.7 && z < 24.9) continue; box(x - s, x + s, F, F + 0.05 + rnd() * 0.14, z - s * 0.8, z + s * 0.8, ph([0x6a5f48, 0x4a4234, 0x8d8a78, 0x2a2c2a][k % 4], 2), { collide: false }); }
+    // Lumière d'ambiance : une ampoule nue très faible ; la lune par la fenêtre (verdâtre)
+    G.addLamp({ x: 9.5, y: CEIL - 0.25, z: 26.0, color: 0x9fd0a0, I: 0.32, dist: 7, halo: 0.5 });
+    G.addLamp({ x: 8.8, y: F + 2.1, z: 22.8, color: 0x7fa090, I: 0.35, dist: 5, halo: 0, bulb: false });
+    // --- Briquet Bic (objet) : sur le bureau ---
+    const lighter = new T.Group(); const bm = new T.Mesh(new T.BoxGeometry(0.024, 0.075, 0.013), ph(0x82868a, 40, 0x555555)); const cp = new T.Mesh(new T.BoxGeometry(0.022, 0.014, 0.012), ph(0xb9bcbe, 90, 0xffffff)); cp.position.y = 0.043; lighter.add(bm, cp);
+    lighter.position.set(11.1, TOP + 0.0125, 26.8); lighter.rotation.set(Math.PI / 2, 0, 0.7); G.scene.add(lighter);
+    const lit = { id: 'lighter', pos: new T.Vector3(11.1, TOP + 0.1, 26.8), radius: 1.9, prompt: 'Ramasser le briquet', use() { lighter.visible = false; G.interactables = G.interactables.filter(i => i.id !== 'lighter'); G.have = G.have || []; G.have.push('bic-gris'); G.say('Un Bic gris. Un classique. Le premier de la collection.'); if (G.audio.flick) G.audio.flick(); } };
+    G.interactables.push(lit); G.onReset.push(() => { lighter.visible = true; if (!G.interactables.includes(lit)) G.interactables.push(lit); });
+    G.usbSpot = [9.05, F + 0.55, 22.72];
+  };
+  G.loaded.push('building');
+})();
+
+</script>
+<script>
 /* ---- js/levels.js ---- */
 /* =====================================================================
    levels.js : les NIVEAUX. Petits, parfaitement linéaires, PUNITIFS : quand on est arrêté, retour immédiat au début.
@@ -6177,8 +6355,10 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   function facade(axis, c, open, a0, a1, feats, o) {
     o = o || {}; const b = -open, f0 = c, f1 = c + b * FR, f2 = c + b * TH, ops = [], gaps = [];
     for (const f of feats) { const y0 = f.y0 || 0, r = [f.a - f.w / 2, f.a + f.w / 2, y0, y0 + f.h]; ops.push(r); if (f.type === 'gap') gaps.push(r); }
-    G.wall(axis, Math.min(f0, f1), Math.max(f0, f1), a0, a1, 0, H, ops, M().facade, { tile: 5 });                  // couche avant (percée de niches)
-    G.wall(axis, Math.min(f1, f2), Math.max(f1, f2), a0, a1, 0, H, gaps, M().concreteDark, { tile: 3 });           // couche arrière (pleine, sauf passages)
+    const lo = Math.min(f0, f2), hi = Math.max(f0, f2), cc = !o.merged;
+    if (o.merged) { if (axis === 'z') G.addBoxCollider(a0, a1, 0, H, lo, hi); else G.addBoxCollider(lo, hi, 0, H, a0, a1); }      // un seul bloc de collision pour tout le segment
+    G.wall(axis, Math.min(f0, f1), Math.max(f0, f1), a0, a1, 0, H, ops, M().facade, { tile: 5, collide: cc });                  // couche avant (percée de niches)
+    G.wall(axis, Math.min(f1, f2), Math.max(f1, f2), a0, a1, 0, H, gaps, M().concreteDark, { tile: 3, collide: cc });           // couche arrière (pleine, sauf passages)
     const X = boxer(axis, c, open); for (const f of feats) decor(X, f);
     // Crasse : sang, mains, taches, humidité, griffures, fissures, craie (décalcomanies plates sur la face)
     const len = a1 - a0, n = Math.floor(len * (o.dirt === undefined ? 0.55 : o.dirt)), yaw = axis === 'z' ? (open > 0 ? 0 : Math.PI) : (open > 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -6301,84 +6481,148 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   /* ---------------------------------------------------------------
      NIVEAU 1
      --------------------------------------------------------------- */
-  const START = [0.1, 9, 0.9];
+  const START = [8.4, 12, 25.4];
+  /* Plan du niveau 1 (1 caractère = 1 m ; x = colonne, z = ligne). # mur · . libre · = passage couvert · T/D tour · G grille · lettres = repères sur sol libre */
+  const MAP = [
+    '################################################################',
+    '################################################################',
+    '################################################################',
+    '#####################################GG#########################',
+    '#####################################..#########################',
+    '#####################################..#########################',
+    '##################################.........#####################',
+    '##################################.........#####################',
+    '####################................c..........W.###############',
+    '######..############.......##.........X..........###############',
+    '######L.############...##..#######....F....#####################',
+    '######..############.c.##..#######.......c.#####################',
+    '######..############...##..#######.........#####################',
+    '######..############...##..###########..########################',
+    '######..############...##B.###########..########################',
+    '###.........########...##..###########..########################',
+    '###..c....F.########...###############..#################.....##',
+    '###.......c...........################..#################.....##',
+    '###.....X......c......################..#################.....##',
+    '###...................################.......c.......====.N...##',
+    '###.B....c..##########################...c...........====.....##',
+    '###.........#############################################.....##',
+    '###TTTTDTTTT#############################################.....##',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '###TTTTTTTTT####################################################',
+    '################################################################',
+    '################################################################',
+    '################################################################',
+    '################################################################'
+  ];
+  const FREE = '.=BLWFcXN';
+  const cell = (c, r) => (r >= 0 && r < MAP.length && c >= 0 && c < MAP[0].length) ? MAP[r][c] : '#';
+  G.placeStart = function () { const P = G.P; P.pos.set(START[0], START[1], START[2]); P.safe.set(START[0], START[1], START[2]); P.yaw = 0; P.pitch = 0; P.eye = START[1] + 1.62; };
+
+  // Décor automatique d'une face de mur : fenêtres sur 3 étages, une porte / un rideau de fer / une fenêtre condamnée au sol
+  function featsFor(L, covered, special) {
+    const f = [];
+    if (special) return special;
+    if (covered || L < 2.2) return f;
+    for (const y0 of [4.2, 7.4, 10.6]) for (let a = 1.3; a < L - 1.0; a += 3.2 + rnd() * 1.2) if (rnd() < 0.72) f.push({ type: 'window', a, w: 1.0, h: 1.4, y0, lit: rnd() < 0.1, boards: rnd() < 0.2 });
+    if (L >= 5.5) {
+      const n = L >= 12 ? 2 : 1; let last = -9;
+      for (let k = 0; k < n; k++) {
+        if (rnd() < 0.2) continue;
+        const kind = rnd(), w = kind < 0.35 ? 1.3 : kind < 0.75 ? 3.2 : 1.0, a = 1.8 + (L - 3.6) * (n === 1 ? rnd() : (k + rnd() * 0.5) / n);
+        if (a - w / 2 < 0.9 || a + w / 2 > L - 0.9 || Math.abs(a - last) < 4) continue; last = a;
+        const sg = rnd() < 0.5 ? G.dress.SIGNS[Math.floor(rnd() * G.dress.SIGNS.length)] : null;
+        if (kind < 0.35) f.push({ type: 'door', a, w: 1.3, h: 2.4, sign: sg }); else if (kind < 0.75) f.push({ type: 'garage', a, w: 3.2, h: 2.7, closed: rnd() < 0.6, sign: sg }); else f.push({ type: 'window', a, w: 1.0, h: 1.0, y0: 1.5, boards: true });
+      }
+    }
+    return f;
+  }
+
   G.buildLevel1 = function () {
-    const m = mats();
-    G.have = []; G.objective = 'La clé USB est près du lit. Prends-la, puis descends.';
-    G.isPlayable = null;                                                                  // filet de la grande carte : inutile ici (il te renvoyait dans la tour)
-    G.B(-24, 72, -1, 0, -44, 14, M().asphalt, { tile: 3, grime: false });                                    // sol
-    const sign = (i) => G.dress.SIGNS[i];
-
-    // ---- Façades : tout est droit, à angles droits ----
-    // Côté tour (sud de la cour)
-    facade('z', -2.65, -1, -12, -2.1, [
-      { type: 'garage', a: -8.6, w: 3.4, h: 2.7, closed: false, sign: sign(5) }, { type: 'window', a: -4.4, w: 1.0, h: 1.0, y0: 1.5, boards: true },
-      ...[-10.8, -8.4, -6, -3.6].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2, lit: rnd() < 0.15 })), ...[-10.8, -6, -3.6].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4 }))], { clear: [-8.6, -4.4] });
-    facade('z', -2.65, -1, 2.1, 12, [
-      { type: 'door', a: 6.2, w: 1.3, h: 2.4, sign: sign(9) }, { type: 'garage', a: 10.3, w: 2.2, h: 2.5, closed: true },
-      ...[3.6, 6, 8.4, 10.8].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2, lit: rnd() < 0.2 })), ...[3.6, 8.4, 10.8].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, boards: rnd() < 0.4 }))], { clear: [6.2, 10.3] });
-    // Cour : ouest, nord, est (avec le passage vers la ruelle)
-    facade('x', -12, 1, -26.6, -2.05, [
-      { type: 'garage', a: -9.5, w: 3.6, h: 2.8, closed: true, sign: sign(2) }, { type: 'door', a: -17, w: 1.3, h: 2.4 }, { type: 'window', a: -21.5, w: 1.0, h: 1.0, y0: 1.5, boards: true },
-      ...[-5, -9.5, -13.5, -17, -21, -24].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[-5, -13.5, -21].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, lit: rnd() < 0.3 }))], { clear: [-9.5, -17] });
-    facade('z', -26, 1, -12, 12, [
-      { type: 'garage', a: -6.5, w: 4.0, h: 2.6, closed: true, sign: sign(6) }, { type: 'door', a: 1, w: 1.3, h: 2.4 }, { type: 'garage', a: 7.5, w: 3.0, h: 2.6, closed: false },
-      ...[-10, -3.5, 4, 10].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[-10, -6.5, -3.5, 4, 10].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, lit: rnd() < 0.2 }))], { clear: [-6.5, 1, 7.5] });
-    facade('x', 12, -1, -26.6, -2.05, [
-      { type: 'gap', a: -13, w: 6, h: 4 }, { type: 'door', a: -22, w: 1.3, h: 2.4 }, { type: 'window', a: -5, w: 1.0, h: 1.0, y0: 1.5 },
-      ...[-5, -9, -17, -21, -24].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[-5, -9, -17, -24].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4 }))]);
-    // Ruelle
-    facade('z', -17, 1, 12, 50, [
-      { type: 'garage', a: 18.5, w: 3.4, h: 2.7, closed: false, sign: sign(0) }, { type: 'door', a: 29, w: 1.3, h: 2.4, sign: sign(7) }, { type: 'garage', a: 40, w: 3.6, h: 2.7, closed: true, sign: sign(1) }, { type: 'window', a: 46, w: 1.0, h: 1.0, y0: 1.5, boards: true },
-      ...[15, 22, 25, 33, 36, 43].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[15, 22, 25, 33, 36, 43, 47].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, lit: rnd() < 0.2 }))], { clear: [18.5, 29, 40] });
-    facade('z', -9, -1, 12, 50, [
-      { type: 'garage', a: 25, w: 4.4, h: 3.0, closed: false, sign: sign(4) }, { type: 'door', a: 36, w: 1.3, h: 2.4 }, { type: 'window', a: 16, w: 1.0, h: 1.0, y0: 1.5 },
-      ...[15, 20, 30, 33, 40, 44, 47].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[15, 20, 30, 40, 47].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, boards: rnd() < 0.3 }))], { clear: [25, 36] });
-    // Place du contact
-    facade('x', 50, 1, -19.6, -17, []); facade('x', 50, 1, -9, -6.4, []);
-    facade('z', -19, 1, 49.4, 60, [{ type: 'garage', a: 55, w: 3.4, h: 2.6, closed: true }, ...[52, 56.5, 58.8].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[52, 56.5].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4 }))], { clear: [55] });
-    facade('z', -7, -1, 49.4, 60, [{ type: 'door', a: 52.5, w: 1.3, h: 2.4 }, ...[52.5, 55.5, 58.4].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), { type: 'window', a: 56.5, w: 1.0, h: 1.0, y0: 1.5, boards: true }], { clear: [52.5] });
-    facade('x', 60, -1, -19.6, -6.4, [{ type: 'door', a: -13, w: 1.6, h: 2.5, sign: sign(8) }, ...[-17, -9.5].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 4.2 })), ...[-17, -13, -9.5].map(a => ({ type: 'window', a, w: 1.0, h: 1.4, y0: 7.4, lit: a === -13 }))], { clear: [-13] });
-
-    // ---- Lumières : peu de lampes, certaines mortes (le noir sert à se cacher) ----
-    lamp(-3.5, 3.2, -3.1, { I: 0.9 });                                                  // près de la porte de la tour
-    lamp(11.3, 3.4, -7.9, { flicker: 0.6, I: 0.8 }); lamp(11.3, 3.4, -18.2, { broken: true });
-    lamp(22, 3.6, -16.6, { broken: true }); lamp(38, 3.6, -9.6, { flicker: 0.4, I: 0.85 }); lamp(59.4, 3.1, -13, { color: 0xffc070, I: 0.8, dist: 9, halo: 2.4 });
-    fireBarrel(5, -23.4); fireBarrel(28.5, -10.3);                                      // deux îlots de lumière : à éviter ou à contourner
-
-    // ---- Cour : cachettes, couvertures basses, désordre ----
-    makeHide({ type: 'dumpster', x: -11.35, z: -6, front: [1, 0] }); makeHide({ type: 'dumpster', x: 11.35, z: -5, front: [-1, 0] });
-    crate(0, -15, 1.0, 0.9); crate(1.05, -15.5, 1.0, 0.9, 0.3); crate(-1.0, -14.6, 0.9, 0.7, 0.5); lowWall(-7, -5, -19.6, -19); crate(-6, -18.2, 1.0, 0.9); crate(7.5, -20, 1.0, 0.9); crate(8.6, -20.3, 0.9, 0.9, 0.2);
-    // ---- Ruelle ----
-    crate(24, -16.35, 1.0, 0.9); crate(25.05, -16.35, 1.0, 0.9, 0.2); crate(36.5, -16.35, 1.0, 0.9); lowWall(30, 32, -11.6, -11); crate(42.5, -9.6, 1.0, 0.9);
-    makeHide({ type: 'locker', x: 33.5, z: -9.45, front: [0, -1] });
-    // ---- Place ----
-    makeHide({ type: 'tarp', x: 52.6, z: -18.3, front: [0, 1] }); crate(54, -14.5, 1.0, 0.9); crate(55.15, -14.9, 0.9, 0.9, 0.3); lowWall(51, 53, -10.4, -9.8);
-    // ---- Câbles et désordre ----
-    for (const [y, z] of [[6.4, -12], [7.8, -20], [5.8, -5]]) cable([-12, y, z], [12, y + 0.3, z + 0.5], 0.9);
-    for (const x of [18, 30, 44]) cable([x, 6, -17], [x + 1, 6.4, -9], 0.7);
-    clutter([{ x0: -11, x1: 11, z0: -25, z1: -5, n: 90 }, { x0: 13, x1: 49, z0: -16.5, z1: -9.5, n: 70 }, { x0: 51, x1: 59, z0: -18.5, z1: -7.5, n: 30 }]);
+    G.have = []; G.objective = 'La clé USB est sur la table de nuit. Prends-la, puis descends.';
+    G.isPlayable = null;                                                                  // filet de la grande carte : inutile ici
+    G.zoneAt = p => (p.x > 3.3 && p.x < 11.7 && p.z > 22.3 && p.z < 29.7) ? 'in' : 'out';
+    G.beginBatch();
+    G.B(-4, 72, -1, 0, -4, 40, M().asphalt, { tile: 3, grime: false });                  // sol
+    G.buildBuilding();
+    // ---- Murs générés à partir du plan : on cherche les « faces » (cases libres collées à un mur), on les regroupe en segments ----
+    const rowsN = MAP.length, colsN = MAP[0].length, runs = [];
+    const isW = (c, r) => !FREE.includes(cell(c, r)), covered = (c, r) => cell(c, r) === '=';
+    const skipTower = (c, r) => 'TD'.includes(cell(c, r));
+    for (const [dir, dc, dr] of [['N', 0, -1], ['S', 0, 1], ['W', -1, 0], ['E', 1, 0]]) {
+      const alongX = dir === 'N' || dir === 'S', outer = alongX ? rowsN : colsN, inner = alongX ? colsN : rowsN;
+      for (let o = 0; o < outer; o++) {
+        let start = -1, cov = false;
+        for (let i = 0; i <= inner; i++) {
+          const c = alongX ? i : o, r = alongX ? o : i;
+          const face = i < inner && FREE.includes(cell(c, r)) && isW(c + dc, r + dr) && !skipTower(c + dc, r + dr);
+          if (face && start < 0) { start = i; cov = covered(c, r); }
+          if ((!face || (face && covered(c, r) !== cov)) && start >= 0) {
+            runs.push({ dir, o, a0: start, a1: i, cov }); start = face ? i : -1; cov = face ? covered(c, r) : false;
+          }
+        }
+      }
+    }
+    for (const rn of runs) {
+      const L = rn.a1 - rn.a0, axis = (rn.dir === 'N' || rn.dir === 'S') ? 'z' : 'x', open = (rn.dir === 'N' || rn.dir === 'W') ? 1 : -1;
+      const c = rn.dir === 'N' || rn.dir === 'W' ? rn.o : rn.o + 1;
+      let special = null;
+      if (axis === 'x' && c === 62 && rn.a0 <= 16 && rn.a1 >= 22) special = [{ type: 'door', a: 19.5 - rn.a0, w: 1.6, h: 2.5, sign: G.dress.SIGNS[8] }];   // la porte du contact
+      const feats = featsFor(L, rn.cov, special), clear = feats.filter(f => f.type !== 'window').map(f => f.a);
+      facade(axis, c, open, rn.a0, rn.a1, feats.map(f => Object.assign({}, f, { a: rn.a0 + f.a })), { merged: true, clear: clear.map(a => rn.a0 + a), dirt: rn.cov ? 0.3 : 0.5 });
+    }
+    // Plafond du passage couvert (masse pleine au-dessus : on ne voit jamais le ciel) + pincement (ressaut) dans le couloir 3
+    G.B(53, 61, 2.7, 14, 19, 21, M().concreteDark, { grime: false, tile: 3 });
+    G.B(27, 29.2, 0, 14, 9.45, 10.0, M().concreteDark, { tile: 3 });
+    // Grille fermée au bout du cul-de-sac nord de la placette : barreaux + noir derrière
+    G.B(37, 39, 0, 2.8, 3.9, 3.96, mats().dark, { collide: false });
+    for (let a = 37.05; a < 39; a += 0.2) G.B(a, a + 0.04, 0, 2.8, 4.0, 4.05, M().iron, { collide: false, grime: false });
+    G.B(37, 39, 2.7, 2.8, 4.0, 4.07, M().iron, { collide: false, grime: false }); G.B(37, 39, 0.9, 0.97, 4.0, 4.07, M().iron, { collide: false, grime: false });
+    // ---- Lumières : peu de lampes, certaines mortes ----
+    lamp(8.0, 3.2, 21.9, { I: 0.9 });                                                  // sur la porte de l'immeuble
+    lamp(17, 3.4, 17.1, { flicker: 0.5, I: 0.8 }); lamp(20.1, 3.4, 12, { broken: true }); lamp(30, 3.4, 8.1, { flicker: 0.4, I: 0.85 });
+    lamp(42.95, 3.4, 11, { flicker: 0.6, I: 0.8 }); lamp(47, 3.2, 19.1, { broken: true }); lamp(53.5, 2.4, 19.1, { flicker: 0.8, I: 0.4, dist: 6, halo: 1.5 }); lamp(61.9, 3.1, 19.5, { color: 0xffc070, I: 0.8, dist: 9, halo: 2.4 });
+    fireBarrel(10.5, 16.5); fireBarrel(38.5, 10.5);
+    // ---- Cachettes (E), couvertures basses, désordre ----
+    makeHide({ type: 'dumpster', x: 3.6, z: 20.5, front: [1, 0] });                  // cour : benne contre le mur ouest
+    makeHide({ type: 'locker', x: 7.0, z: 9.4, front: [0, 1] });                     // cul-de-sac nord de la cour
+    makeHide({ type: 'dumpster', x: 26.0, z: 15.45, front: [0, -1] });               // cul-de-sac sud du couloir 3
+    makeHide({ type: 'tarp', x: 48.45, z: 9.0, front: [-1, 0] });                    // cul-de-sac est de la placette
+    for (const [x, z, s, h, ry] of [[5.5, 16.5, 1.0, 0.9, 0.2], [6.55, 16.7, 0.9, 0.9, 0.5], [9.5, 20.5, 1.0, 0.9, 0], [8.0, 18.7, 0.9, 0.7, 0.4], [4.8, 18.4, 1.0, 0.9, 0.1], [10.5, 17.5, 0.9, 0.9, 0.3],
+      [15.5, 18.5, 1.0, 0.9, 0.2], [13.2, 17.45, 0.9, 0.9, 0], [21.5, 11.5, 1.0, 0.9, 0.3], [36.5, 8.5, 1.0, 0.9, 0.2], [41.5, 11.5, 1.0, 0.9, 0.4], [45.5, 19.6, 1.0, 0.9, 0], [41.5, 20.4, 0.9, 0.9, 0.3], [24.5, 8.6, 0.9, 0.9, 0.2]]) crate(x, z, s, h, ry);
+    barrel(11.4, 15.5); barrel(3.5, 15.6); barrel(12.8, 19.5); barrel(33.4, 9.4);
+    // ---- Câbles, linge, désordre ----
+    for (const [z, y] of [[17.2, 3.6], [19.6, 3.2], [21.0, 3.9]]) cable([3.1, y, z], [11.9, y - 0.15, z + 0.4], 0.5);
+    for (const x of [15, 18.5, 41]) cable([x, 3.4, 17.1], [x + 1, 3.6, 19.9], 0.5);
+    cable([24, 3.5, 8.1], [32, 3.5, 9.9], 0.6);
+    clutter([{ x0: 3.4, x1: 11.6, z0: 15.2, z1: 21.8, n: 70 }, { x0: 12.2, x1: 21.8, z0: 17.2, z1: 19.8, n: 25 }, { x0: 20.3, x1: 22.7, z0: 8.3, z1: 16.8, n: 20 }, { x0: 23.5, x1: 33.5, z0: 8.2, z1: 9.4, n: 20 }, { x0: 34.2, x1: 42.8, z0: 6.2, z1: 12.8, n: 30 }, { x0: 38.2, x1: 52.8, z0: 19.2, z1: 20.8, n: 25 }, { x0: 57.3, x1: 61.7, z0: 16.3, z1: 22.7, n: 18 }]);
     flushDecals();
+    G.endBatch();
 
-    // ---- Objets : la clé USB (chez nous) ----
-    const usb = new T.Mesh(new T.BoxGeometry(0.05, 0.02, 0.16), new T.MeshPhongMaterial({ color: 0x8c98a4, shininess: 90, specular: 0xffffff })); usb.position.set(-1.0, 9.02, 0.35); usb.rotation.y = 0.6; G.scene.add(usb);
-    const glint = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xdfe8ff, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 })); glint.position.set(-1.0, 9.1, 0.35); glint.scale.set(0.25, 0.25, 1); G.scene.add(glint);
+    // ---- La clé USB (sur la table de nuit, chez nous) ----
+    const [ux, uy, uz] = G.usbSpot;
+    const usb = new T.Mesh(new T.BoxGeometry(0.05, 0.02, 0.16), new T.MeshPhongMaterial({ color: 0x8c98a4, shininess: 90, specular: 0xffffff })); usb.position.set(ux, uy, uz); usb.rotation.y = 0.6; G.scene.add(usb);
+    const glint = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xdfe8ff, blending: T.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 })); glint.position.set(ux, uy + 0.08, uz); glint.scale.set(0.25, 0.25, 1); G.scene.add(glint);
     G.animated.push({ update() { glint.material.opacity = usb.visible ? 0.14 + 0.1 * Math.sin(performance.now() / 650) : 0; } });
-    const usbItem = { id: 'usb', pos: new T.Vector3(-1.0, 9.1, 0.35), radius: 2.0, prompt: 'Prendre la clé USB',
-      use() { usb.visible = false; G.interactables = G.interactables.filter(i => i !== usbItem); G.have.push('usb-chez-nous'); G.objective = 'Livre la clé au contact, au fond de la ruelle.'; G.say('La clé. Il faut la livrer au contact, au bout de la ruelle. Discret.', 6000); } };
+    const usbItem = { id: 'usb', pos: new T.Vector3(ux, uy + 0.1, uz), radius: 2.0, prompt: 'Prendre la clé USB',
+      use() { usb.visible = false; G.interactables = G.interactables.filter(i => i !== usbItem); G.have.push('usb-chez-nous'); G.objective = 'Livre la clé au contact, au fond des ruelles.'; G.say('La clé. Il faut la livrer au contact, tout au bout. Discret.', 6000); } };
     G.interactables.push(usbItem);
     G.onReset.push(() => { usb.visible = true; if (!G.interactables.includes(usbItem)) G.interactables.push(usbItem); });
 
     // ---- Le contact : devant la porte du fond ----
-    const contact = civilian(); contact.position.set(58.7, 0, -13); contact.rotation.y = -Math.PI / 2; G.scene.add(contact);
-    const rig = contact.userData.rig; G.animated.push({ update() { const t = performance.now() / 1000; rig.torso.scale.y = 1 + Math.sin(t * 1.5) * 0.012; rig.head.rotation.y = Math.sin(t * 0.5) * 0.4; rig['sh1'].rotation.x = -0.2; rig['sh-1'].rotation.x = 0.1; rig['el1'].rotation.x = -0.4; rig['el-1'].rotation.x = -0.3; } });
-    G.interactables.push({ id: 'contact', pos: new T.Vector3(58.3, 1.3, -13), radius: 2.4, prompt: 'Livrer la clé USB',
+    const contact = civilian(); contact.position.set(61.2, 0, 19.5); contact.rotation.y = -Math.PI / 2; G.scene.add(contact);
+    const rig = contact.userData.rig; G.animated.push({ update() { const t = performance.now() / 1000; rig.torso.scale.y = 1 + Math.sin(t * 1.5) * 0.012; rig.head.rotation.y = Math.sin(t * 0.5) * 0.4; } });
+    G.interactables.push({ id: 'contact', pos: new T.Vector3(60.7, 1.3, 19.5), radius: 2.4, prompt: 'Livrer la clé USB',
       use() { if (!G.have.includes('usb-chez-nous')) { G.say('« T\'as rien pour moi. Reviens avec la clé. »', 3500); return; } G.levelComplete(); } });
 
-    // ---- Police : un patrouilleur dans la cour, un garde sur la place ----
-    G.addCop(G.makeCop(), [-8, -14], 0, [[-8, -14], [8, -14]]);
-    G.addCop(G.makeCop(), [55.5, -11.5], -Math.PI / 2 - 0.3, null);
-    G.buildNavGrid(-16, 64, -30, -1, 1);
+    // ---- Police : 2 seulement. Un patrouilleur dans la cour, un garde sur la placette ----
+    G.addCop(G.makeCop(), [5.5, 17.5], 0, [[5.5, 17.5], [9.5, 17.5], [9.5, 20.5], [5.5, 20.5]]);
+    G.addCop(G.makeCop(), [38.5, 9.5], -Math.PI / 2, null);
+    G.buildNavGrid(0, 64, 0, 34, 0.5);
     G.addFogSheets();
   };
 
@@ -6461,6 +6705,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     setTimeout(() => { if (G.endLevelScreen) G.endLevelScreen('NIVEAU 1 TERMINÉ', 'la suite arrive · cliquer pour rejouer'); }, 1500);
   };
 
+  G.facade = facade; G.cable = cable;
   G.loaded.push('levels');
 })();
 
@@ -6893,8 +7138,9 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     if (G.loadCopModel) { progress(0.3, 'Modèle du policier'); await G.loadCopModel(); }
     if (G.mode === 'sandbox') { progress(0.5, 'Grande carte (ancienne)'); G.buildWorld(); await tick(); progress(0.85, 'Police'); G.initCops(); }
     else if (G.mode === 'lab') { progress(0.5, 'Labo policier'); G.buildBase(); G.buildLab(); await tick(); }
-    else { progress(0.5, 'Niveau 1 : chez nous'); G.buildBase(); G.buildTower(); G.buildLevel1(); await tick(); }
-    progress(0.9, 'Joueur'); G.initPlayer(); if (G.mode === 'lab') { G.P.pos.set(0, 0, 4); G.P.safe.set(0, 0, 4); G.P.eye = 1.62; } G.updateLamps(0, 0); G.render(0);
+    else { progress(0.5, 'Niveau 1 : chez nous'); G.buildBase(); G.buildLevel1(); await tick(); }
+    progress(0.9, 'Joueur'); G.initPlayer(); if (G.mode === 'level' && G.placeStart) G.placeStart();
+    if (G.mode === 'lab') { G.P.pos.set(0, 0, 4); G.P.safe.set(0, 0, 4); G.P.eye = 1.62; } G.updateLamps(0, 0); G.render(0);
     progress(1, 'Prêt');
     last = performance.now(); requestAnimationFrame(loop);
     bindInput();
@@ -6993,7 +7239,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'levels', 'player', 'audio', 'game'];
+  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'building', 'levels', 'player', 'audio', 'game'];
   const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };
