@@ -177,3 +177,4 @@ Carte v2 implémentée + dressing Outlast + police (voir plus haut). Avant : car
 
 ## PAUSE (décision de l'utilisateur) — projet en pause
 Retours sur la dernière version (niveau 1 v2, artifact v16) : « beaucoup de problèmes, utilise le bon sens » ; **lit placé devant la porte, chambre vraiment mal faite** ; **câbles dans tous les sens, pas bien du tout** ; **les flics apparaissent de nulle part, complètement buggés** ; **trop d'éléments en bordel**. Il n'aime pas la direction prise : **PAUSE pour l'instant**. À la reprise : ne rien ajouter avant d'avoir discuté de la direction avec lui ; repartir de peu d'éléments, bien placés (circulation libre, meubles pas devant les portes, très peu de câbles), vérifier le comportement des flics (apparition) avant tout contenu. Dernier état publié : artifact version 16.
+- **Point positif de l'utilisateur : la cage d'escalier (js/building.js) est « vraiment stylée »** : à conserver telle quelle à la reprise.
