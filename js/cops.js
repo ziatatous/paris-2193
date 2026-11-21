@@ -220,6 +220,7 @@
     r.head.rotation.y = c.hy + tw * 0.25 * c.twDir; r.head.rotation.z = (run ? 0.22 : 0.12) * Math.sin(t * 0.7 + 1) + 0.12 + jit * 0.1;
     r.head.rotation.x = (c.shoutT > 0 ? -0.5 : 0.18 + (run ? 0.1 : 0)) + Math.sin(t * 1.1) * 0.03;
     r.neck.rotation.x = 0.25;
+    if (r.skirt) { r.skirt.rotation.x = -(r['hip1'].rotation.x + r['hip-1'].rotation.x) * 0.25 - 0.08 * f; r.skirt.rotation.z = s * 0.05 * f; r.skirt.position.y = 0.0; }   // le manteau balance derrière la marche
     r.beam.material.opacity = 0.03 + Math.min(1, c.alert) * 0.05;
     c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.facing;
     if (c.lamp) { const fx = Math.sin(c.facing + r.head.rotation.y), fz = Math.cos(c.facing + r.head.rotation.y); c.lamp.pos.set(c.x + fx * 0.9, c.y + 1.7, c.z + fz * 0.9); }   // la lampe frontale éclaire là où il regarde

@@ -82,40 +82,63 @@
   // Un policier (utilisé par cops.js) : squelette articulé (bassin > torse > épaules > coudes ; hanches > genoux), casque + lampe frontale.
   // Chaque articulation est un "pivot" (Group) qu'on tourne pour animer ; le dessin est dans cops.js (animate).
   G.makeCop = function () {
-    const g = new T.Group(), P = (c, s) => new T.MeshPhongMaterial({ color: c, shininess: s === undefined ? 6 : s });
-    const uni = P(0x14181b, 2), vest = P(0x1f2529, 2), helm = P(0x0c0f11, 2), skin = P(0x6a6a62, 2), boot = P(0x060707), glove = P(0x090a0b), metal = P(0x1c2125, 12), coat = P(0x101315, 1), stain = P(0x2a1412, 1);
-    const rig = {}, pivot = (parent, x, y, z) => { const q = new T.Group(); q.position.set(x, y, z); parent.add(q); return q; };
-    rig.hips = pivot(g, 0, 0.98, 0);                                                           // bassin (le point qui monte et descend à la marche)
-    G.ball(rig.hips, uni, [0, 0.02, 0], 0.17, 1.2, 0.7, 0.9, 8);
-    rig.torso = pivot(rig.hips, 0, 0.05, 0);                                                    // torse (se penche, se tord)
-    G.limb(rig.torso, vest, [0, 0.0, 0], [0, 0.5, 0], 0.2, 0.25, 8); G.ball(rig.torso, vest, [0, 0.5, 0], 0.24, 1.05, 0.5, 0.8, 8);
-    const belt = new T.Mesh(new T.BoxGeometry(0.4, 0.06, 0.26), glove); belt.position.set(0, 0.04, 0); rig.torso.add(belt);
-    const holster = new T.Mesh(new T.BoxGeometry(0.08, 0.2, 0.1), glove); holster.position.set(0.22, 0.0, 0.02); rig.torso.add(holster);
-    const radio = new T.Mesh(new T.BoxGeometry(0.07, 0.13, 0.05), metal); radio.position.set(-0.2, 0.46, 0.12); rig.torso.add(radio);         // radio d'épaule
-    const ant = new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.2, 4), glove); ant.position.set(-0.2, 0.62, 0.12); rig.torso.add(ant);
-    G.limb(rig.hips, coat, [0, 0.12, 0], [0, -0.58, 0], 0.24, 0.3, 8);                         // pan de manteau usé qui pend sur les cuisses
-    const patch = new T.Mesh(new T.BoxGeometry(0.2, 0.28, 0.02), stain); patch.position.set(-0.06, 0.28, 0.2); patch.rotation.z = 0.3; rig.torso.add(patch);   // tache sombre sur le gilet
+    const g = new T.Group(), rig = {};
+    const mat = (c, sh, sp) => new T.MeshPhongMaterial({ color: c, shininess: sh, specular: sp === undefined ? 0x222222 : sp });
+    const leather = mat(0x16191c, 18, 0x14181b), leather2 = mat(0x1d2124, 14, 0x12161a), black = mat(0x0a0b0c, 30, 0x1a1e22), mask = mat(0x1b1e20, 14, 0x15191c),
+      glass = mat(0x070b0c, 110, 0x8aa0b0), strap = mat(0x1d1812, 12, 0x201a14), metal = mat(0x23282c, 40, 0x4a5258);
+    const pivot = (parent, x, y, z) => { const q = new T.Group(); q.position.set(x, y, z); parent.add(q); return q; };
+    const lathe = (pts, seg, m, parent, x, y, z, sx, sy, sz, open) => { const q = new T.Mesh(new T.LatheGeometry(pts.map(p => new T.Vector2(p[0], p[1])), seg), m); q.position.set(x || 0, y || 0, z || 0); q.scale.set(sx || 1, sy || 1, sz || 1); if (open) q.material = m.clone(), q.material.side = T.DoubleSide; parent.add(q); return q; };
+    const ell = (parent, m, x, y, z, rx, ry, rz) => { const q = new T.Mesh(new T.SphereGeometry(1, 14, 10), m); q.position.set(x, y, z); q.scale.set(rx, ry, rz); parent.add(q); return q; };
+    const tube = (parent, m, y0, y1, r0, r1, seg) => { const h = y0 - y1, q = new T.Mesh(new T.CylinderGeometry(r0, r1, h, seg || 12, 1), m); q.position.set(0, (y0 + y1) / 2, 0); parent.add(q); return q; };
+
+    rig.hips = pivot(g, 0, 0.98, 0);
+    ell(rig.hips, leather, 0, 0.0, 0, 0.2, 0.14, 0.15);                                            // bassin
+    // Long manteau de cuir : un jupon évasé qui tombe jusqu'aux mollets (porté par le bassin, il balance avec la marche)
+    rig.skirt = lathe([[0.19, 0.12], [0.22, 0.0], [0.25, -0.3], [0.29, -0.55], [0.3, -0.6]], 16, leather, rig.hips, 0, 0, 0, 1, 1, 0.82, true);
+    rig.torso = pivot(rig.hips, 0, 0.05, 0);
+    // Torse : profil lissé (taille -> poitrine -> épaules), aplati d'avant en arrière
+    lathe([[0.15, -0.04], [0.17, 0.12], [0.22, 0.32], [0.25, 0.46], [0.2, 0.56], [0.09, 0.61]], 16, leather, rig.torso, 0, 0, 0, 1.18, 1, 0.78);
+    // Grand col relevé + revers
+    const col = new T.Mesh(new T.CylinderGeometry(0.15, 0.1, 0.12, 14, 1, true), leather2); col.material.side = T.DoubleSide; col.position.set(0, 0.62, -0.01); col.rotation.x = -0.12; rig.torso.add(col);
+    for (const sd of [-1, 1]) { const rev = new T.Mesh(new T.BoxGeometry(0.1, 0.34, 0.025), leather2); rev.position.set(sd * 0.1, 0.42, 0.185); rev.rotation.z = sd * 0.28; rev.rotation.y = -sd * 0.25; rig.torso.add(rev); }
+    // Sangle en travers de la poitrine, ceinture, étui et matraque
+    const sb = new T.Mesh(new T.BoxGeometry(0.045, 0.62, 0.02), strap); sb.position.set(-0.02, 0.33, 0.2); sb.rotation.z = 0.62; rig.torso.add(sb);
+    const belt = new T.Mesh(new T.CylinderGeometry(0.205, 0.215, 0.07, 16, 1, true), strap); belt.material.side = T.DoubleSide; belt.position.set(0, 0.04, 0); belt.scale.z = 0.82; rig.torso.add(belt);
+    const buckle = new T.Mesh(new T.BoxGeometry(0.06, 0.05, 0.02), metal); buckle.position.set(0, 0.04, 0.18); rig.torso.add(buckle);
+    const holster = new T.Mesh(new T.BoxGeometry(0.07, 0.2, 0.08), black); holster.position.set(0.2, -0.06, 0.04); rig.torso.add(holster);
+    const baton = new T.Mesh(new T.CylinderGeometry(0.02, 0.026, 0.5, 8), black); baton.position.set(-0.21, -0.2, 0.03); baton.rotation.z = 0.08; rig.torso.add(baton);
     rig.neck = pivot(rig.torso, 0, 0.62, 0);
+    tube(rig.neck, mask, 0.07, -0.02, 0.055, 0.06, 10);
     rig.head = pivot(rig.neck, 0, 0.1, 0);
-    G.ball(rig.head, skin, [0, 0.0, 0], 0.105, 0.85, 1.15, 1, 10); G.ball(rig.head, helm, [0, 0.06, -0.005], 0.14, 1, 0.78, 1.08, 10);   // visage et casque
-    const visor = new T.Mesh(new T.BoxGeometry(0.19, 0.045, 0.05), P(0x20282e, 40)); visor.position.set(0, 0.015, 0.095); rig.head.add(visor);
-    const lampBody = new T.Mesh(new T.CylinderGeometry(0.025, 0.03, 0.06, 6), metal); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0.07, 0.08, 0.13); rig.head.add(lampBody);   // lampe frontale
-    const beam = new T.Mesh(new T.CylinderGeometry(1.1, 0.03, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
-    beam.rotation.x = Math.PI / 2 - 0.5;   // relevé : la tête est penchée vers l'avant, le faisceau doit rester à peu près horizontal
-     beam.position.set(0.07, 0.04, 4.1); rig.head.add(beam); rig.beam = beam;                               // faisceau visible dans la brume
-    for (const s of [-1, 1]) {
-      const sh = pivot(rig.torso, s * 0.3, 0.5, 0);                                              // épaule
-      G.limb(sh, uni, [0, 0, 0], [0, -0.36, 0], 0.07, 0.055, 6); G.ball(sh, vest, [0, 0, 0], 0.085, 1, 1, 1, 6);
-      const el = pivot(sh, 0, -0.36, 0); G.limb(el, uni, [0, 0, 0], [0, -0.36, 0], 0.055, 0.042, 6);   // coude (bras longs, maigres)
-      G.ball(el, skin, [0, -0.4, 0.01], 0.05, 0.8, 1.35, 0.9, 6);
-      rig['sh' + s] = sh; rig['el' + s] = el;
-      const hip = pivot(rig.hips, s * 0.11, -0.04, 0);                                            // hanche
-      G.limb(hip, uni, [0, 0, 0], [0, -0.45, 0], 0.1, 0.075, 6);
-      const kn = pivot(hip, 0, -0.45, 0); G.limb(kn, uni, [0, 0, 0], [0, -0.45, 0], 0.075, 0.06, 6);   // genou
-      G.ball(kn, boot, [0, -0.47, 0.05], 0.085, 0.95, 0.65, 1.7, 6);
-      rig['hip' + s] = hip; rig['kn' + s] = kn;
+    // Tête : cagoule de cuir, masque à gaz (deux gros verres ronds, museau-filtre), casquette à visière
+    ell(rig.head, mask, 0, 0, 0, 0.098, 0.12, 0.105);
+    for (const sd of [-1, 1]) {
+      const rim = new T.Mesh(new T.TorusGeometry(0.036, 0.008, 6, 14), black); rim.position.set(sd * 0.045, 0.01, 0.095); rim.rotation.y = sd * -0.15; rig.head.add(rim);
+      const lens = new T.Mesh(new T.CircleGeometry(0.034, 14), glass); lens.position.set(sd * 0.045, 0.01, 0.097); lens.rotation.y = sd * -0.15; rig.head.add(lens);
     }
-    const baton = new T.Mesh(new T.CylinderGeometry(0.02, 0.025, 0.55, 5), glove); baton.position.set(0, -0.36, 0.2); baton.rotation.x = 1.3; rig['el1'].add(baton);
+    const snout = new T.Mesh(new T.CylinderGeometry(0.04, 0.05, 0.11, 10), mask); snout.rotation.x = Math.PI / 2; snout.position.set(0, -0.05, 0.12); rig.head.add(snout);
+    const filt = new T.Mesh(new T.CylinderGeometry(0.03, 0.03, 0.03, 10), metal); filt.rotation.x = Math.PI / 2; filt.position.set(0, -0.05, 0.19); rig.head.add(filt);
+    const band = new T.Mesh(new T.CylinderGeometry(0.108, 0.112, 0.05, 16, 1, true), black); band.material.side = T.DoubleSide; band.position.set(0, 0.095, 0); rig.head.add(band);
+    const cap = lathe([[0.0, 0.0], [0.15, 0.0], [0.14, 0.035], [0.105, 0.06]], 16, black, rig.head, 0, 0.115, 0.005, 1, 1, 1.05, true); cap.rotation.x = 0.1;
+    const visor = new T.Mesh(new T.CylinderGeometry(0.1, 0.1, 0.012, 14, 1, false, -1.0, 2.0), black); visor.position.set(0, 0.1, 0.11); visor.rotation.x = 0.28; visor.rotation.y = Math.PI * 0.5 - 0.0; visor.scale.set(1.0, 1, 1); rig.head.add(visor);
+    const lampBody = new T.Mesh(new T.CylinderGeometry(0.022, 0.028, 0.05, 8), metal); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0, 0.13, 0.16); rig.head.add(lampBody);   // lampe frontale sur la casquette
+    const beam = new T.Mesh(new T.CylinderGeometry(1.1, 0.03, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
+    beam.rotation.x = Math.PI / 2 - 0.5; beam.position.set(0, 0.1, 4.2); rig.head.add(beam); rig.beam = beam;
+    for (const sd of [-1, 1]) {
+      const sh = pivot(rig.torso, sd * 0.29, 0.5, 0);                                           // épaule
+      ell(sh, leather, 0, 0, 0, 0.085, 0.08, 0.085);
+      const up = new T.Mesh(new T.CylinderGeometry(0.075, 0.058, 0.36, 12), leather); up.position.set(0, -0.18, 0); sh.add(up);                     // bras de manteau (manche large)
+      const el = pivot(sh, 0, -0.36, 0); ell(el, leather, 0, 0, 0, 0.062, 0.06, 0.062);
+      const lo = new T.Mesh(new T.CylinderGeometry(0.06, 0.05, 0.34, 12), leather); lo.position.set(0, -0.17, 0); el.add(lo);
+      ell(el, black, 0, -0.38, 0.01, 0.05, 0.075, 0.04);                                         // main gantée
+      rig['sh' + sd] = sh; rig['el' + sd] = el;
+      const hip = pivot(rig.hips, sd * 0.1, -0.04, 0);                                           // hanche : cuisse sous le manteau
+      const th = new T.Mesh(new T.CylinderGeometry(0.095, 0.07, 0.46, 12), leather2); th.position.set(0, -0.23, 0); hip.add(th);
+      const kn = pivot(hip, 0, -0.46, 0); ell(kn, leather2, 0, 0, 0, 0.07, 0.065, 0.07);
+      const sn = new T.Mesh(new T.CylinderGeometry(0.068, 0.05, 0.44, 12), black); sn.position.set(0, -0.22, 0); kn.add(sn);                     // haute botte de cuir
+      ell(kn, black, 0, -0.47, 0.06, 0.06, 0.045, 0.13);                                         // pied
+      rig['hip' + sd] = hip; rig['kn' + sd] = kn;
+    }
     g.userData.rig = rig; g.userData.parts = rig; return g;
   };
 
