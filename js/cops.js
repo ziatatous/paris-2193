@@ -268,7 +268,7 @@
       if (edge) { A.prog += 0.2; P.kickR = (Math.random() - 0.5) * 0.25; P.kickP = -0.05; }
       A.prog = Math.max(0, A.prog - dt * (others ? 0.5 : 0.28));
       P.animRoll += Math.sin(A.t * 22) * 0.02 * A.prog;                                                     // tu te tords
-      if (A.t - A.said > 0.7) { A.said = A.t; G.say && G.say('ESPACE ! ' + '▮'.repeat(Math.round(A.prog * 10)) + '▯'.repeat(10 - Math.round(A.prog * 10)), 800); }
+      if (A.t - A.said > 0.7) { A.said = A.t; G.say && G.say('ESPACE ! ' + '#'.repeat(Math.round(A.prog * 10)) + '-'.repeat(10 - Math.round(A.prog * 10)), 800); }
       if (A.prog >= 1) { endArrest(true); return; }
       if (A.t - A.tDown > 2.4) { A.stage = 'cuff'; A.tCuff = A.t; snd('fx', 'arrest', 1); G.say && G.say('', 1); }
     }
