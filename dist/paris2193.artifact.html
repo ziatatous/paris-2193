@@ -5352,7 +5352,31 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   }
   // Un policier (utilisé par cops.js) : squelette articulé (bassin > torse > épaules > coudes ; hanches > genoux), casque + lampe frontale.
   // Chaque articulation est un "pivot" (Group) qu'on tourne pour animer ; le dessin est dans cops.js (animate).
+  G.COP_STYLE = 'stick';   // 'stick' = stickman provisoire ; 'detail' = corps détaillé (manteau, masque) / modèle 3D
+  // STICKMAN (provisoire, en attendant un vrai modèle) : mêmes pivots que le corps détaillé, donc mêmes animations (cops.js).
+  function makeStickCop() {
+    const g = new T.Group(), rig = {}, m = new T.MeshPhongMaterial({ color: 0x4a5056, shininess: 2, specular: 0x000000 });
+    const pivot = (parent, x, y, z) => { const q = new T.Group(); q.position.set(x, y, z); parent.add(q); return q; };
+    const rod = (parent, y0, y1, r) => { const q = new T.Mesh(new T.CylinderGeometry(r, r, y0 - y1, 6), m); q.position.set(0, (y0 + y1) / 2, 0); parent.add(q); };
+    const dot = (parent, x, y, z, r) => { const q = new T.Mesh(new T.SphereGeometry(r, 8, 6), m); q.position.set(x, y, z); parent.add(q); };
+    rig.hips = pivot(g, 0, 0.98, 0); rig.torso = pivot(rig.hips, 0, 0.05, 0); rod(rig.torso, 0, 0.62, 0.03);
+    rig.neck = pivot(rig.torso, 0, 0.62, 0); rig.head = pivot(rig.neck, 0, 0.1, 0); dot(rig.head, 0, 0.02, 0, 0.1);
+    const lampBody = new T.Mesh(new T.CylinderGeometry(0.022, 0.028, 0.05, 8), m); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0, 0.06, 0.1); rig.head.add(lampBody);
+    const beam = new T.Mesh(new T.CylinderGeometry(1.1, 0.03, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
+    beam.rotation.x = Math.PI / 2 - 0.5; beam.position.set(0, 0.06, 4.2); rig.head.add(beam); rig.beam = beam;
+    for (const sd of [-1, 1]) {
+      const sh = pivot(rig.torso, sd * 0.2, 0.55, 0); rod(sh, 0, -0.36, 0.022); dot(sh, 0, 0, 0, 0.03);
+      const el = pivot(sh, 0, -0.36, 0); rod(el, 0, -0.34, 0.02); dot(el, 0, -0.35, 0, 0.03);
+      rig['sh' + sd] = sh; rig['el' + sd] = el;
+      const hip = pivot(rig.hips, sd * 0.08, -0.04, 0); rod(hip, 0, -0.46, 0.026);
+      const kn = pivot(hip, 0, -0.46, 0); rod(kn, 0, -0.46, 0.024); dot(kn, 0, 0, 0, 0.03);
+      rig['hip' + sd] = hip; rig['kn' + sd] = kn;
+    }
+    rod(rig.hips, 0.02, -0.04, 0.03);
+    g.userData.rig = rig; g.userData.parts = rig; return g;
+  }
   G.makeCop = function () {
+    if (G.COP_STYLE === 'stick') return makeStickCop();
     const g = new T.Group(), rig = {};
     const mat = (c, sh, sp) => new T.MeshPhongMaterial({ color: c, shininess: sh, specular: sp === undefined ? 0x222222 : sp });
     const leather = mat(0x16191c, 18, 0x14181b), leather2 = mat(0x1d2124, 14, 0x12161a), black = mat(0x0a0b0c, 30, 0x1a1e22), mask = mat(0x1b1e20, 14, 0x15191c),
