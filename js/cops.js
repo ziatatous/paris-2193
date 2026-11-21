@@ -12,7 +12,7 @@
 (function () {
   'use strict';
   const G = window.G, T = G.T;
-  const R = 0.4, STEP = 1.1, SPEED = { patrol: 1.4, investigate: 2.4, chase: 6.0, search: 2.2 };
+  const R = 0.4, STEP = 1.1, SPEED = { patrol: 1.4, investigate: 2.4, chase: 5.2, search: 2.2 };
   const cops = G.cops = []; G.alert = 0; G.frozen = false; G.arrest = null;
   let nodes = [], adj = [];
   const snd = (n, a, b) => { const f = G.audio && G.audio[n]; if (f) f(a, b); };

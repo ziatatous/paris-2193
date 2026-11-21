@@ -98,7 +98,7 @@
     G.ball(rig.head, skin, [0, 0.0, 0], 0.105, 0.9, 1.05, 1, 10); G.ball(rig.head, helm, [0, 0.06, -0.005], 0.14, 1, 0.78, 1.08, 10);   // visage et casque
     const visor = new T.Mesh(new T.BoxGeometry(0.19, 0.045, 0.05), P(0x20282e, 40)); visor.position.set(0, 0.015, 0.095); rig.head.add(visor);
     const lampBody = new T.Mesh(new T.CylinderGeometry(0.025, 0.03, 0.06, 6), metal); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0.07, 0.08, 0.13); rig.head.add(lampBody);   // lampe frontale
-    const beam = new T.Mesh(new T.CylinderGeometry(0.03, 1.1, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
+    const beam = new T.Mesh(new T.CylinderGeometry(1.1, 0.03, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
     beam.rotation.x = Math.PI / 2 + 0.1; beam.position.set(0.07, 0.04, 4.1); rig.head.add(beam); rig.beam = beam;                               // faisceau visible dans la brume
     for (const s of [-1, 1]) {
       const sh = pivot(rig.torso, s * 0.3, 0.5, 0);                                              // épaule

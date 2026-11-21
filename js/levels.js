@@ -110,8 +110,9 @@
     G.animated.push({ update() { f.scale.set(0.8 + 0.25 * Math.random(), 1.0 + 0.4 * Math.random(), 1); } });
     G.addLamp({ x, y: 1.3, z, color: 0xff8a3a, I: 1.25, dist: 11, halo: 2.4, flicker: 6, bulb: false });
   }
-  function crate(x, z, s, h, ry) { const q = mesh(new T.BoxGeometry(s, h, s), M().wood, x, h / 2, z); q.rotation.y = ry || 0; G.addBoxCollider(x - s / 2, x + s / 2, 0, h, z - s / 2, z + s / 2); }
-  function lowWall(x0, x1, z0, z1) { block(x0, x1, 0, 0.85, z0, z1); }
+  const CRATE = new T.MeshPhongMaterial({ color: 0x241e17, shininess: 1, specular: 0x000000 });
+  function crate(x, z, s, h, ry) { const q = mesh(new T.BoxGeometry(s, h, s), CRATE, x, h / 2, z); q.rotation.y = ry || 0; G.addBoxCollider(x - s / 2, x + s / 2, 0, h, z - s / 2, z + s / 2); }
+  function lowWall(x0, x1, z0, z1) { block(x0, x1, 0, 0.85, z0, z1, new T.MeshPhongMaterial({ color: 0x2c2e2d, shininess: 1, specular: 0x000000 })); }
 
   // Cachettes à ENTRER (E) : benne, casier, tas de caisses sous une bâche. front = direction vers l'extérieur.
   G.hides = [];
@@ -169,11 +170,11 @@
     }
     const dummy = new T.Object3D(), inst = (geo, mat, list, colors, sc) => { if (!list.length) return; const im = new T.InstancedMesh(geo, mat, list.length), col = new T.Color();
       list.forEach((s, i) => { dummy.position.set(s[0], s[1], s[2]); dummy.rotation.set(0, s[3], 0); const k = sc(s); dummy.scale.set(k[0], k[1], k[2]); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); im.setColorAt(i, col.setHex(colors[Math.floor(rnd() * colors.length)])); }); G.scene.add(im); };
-    const mt = s => new T.MeshPhongMaterial({ color: 0xffffff, shininess: s || 4 });
-    inst(new T.SphereGeometry(0.28, 8, 6), mt(30), bag, [0x0b0d0b, 0x151815, 0x1c1c1a], s => [s[4], s[4] * 0.7, s[4]]);
-    inst(new T.BoxGeometry(0.5, 0.32, 0.4), mt(1), card, [0x5a4a35, 0x4a3f30, 0x3b342b], s => [s[4], s[4], s[4]]);
-    inst(new T.BoxGeometry(1.2, 0.05, 0.12), mt(1), plank, [0x4a3f30, 0x3a3328], s => [s[4], 1, 1]);
-    inst(new T.BoxGeometry(0.3, 0.2, 0.25), mt(1), rub, [0x555855, 0x484b49, 0x3c403e], s => [s[4], s[4], s[4]]);
+    const mt = s => new T.MeshPhongMaterial({ color: 0xffffff, shininess: 1, specular: 0x000000 });
+    inst(new T.SphereGeometry(0.28, 8, 6), mt(30), bag, [0x070807, 0x0c0e0c, 0x101110], s => [s[4], s[4] * 0.7, s[4]]);
+    inst(new T.BoxGeometry(0.5, 0.32, 0.4), mt(1), card, [0x2a2319, 0x231e17, 0x1d1a15], s => [s[4], s[4], s[4]]);
+    inst(new T.BoxGeometry(1.2, 0.05, 0.12), mt(1), plank, [0x241e17, 0x1c1812], s => [s[4], 1, 1]);
+    inst(new T.BoxGeometry(0.3, 0.2, 0.25), mt(1), rub, [0x2a2c2a, 0x242624, 0x1e201f], s => [s[4], s[4], s[4]]);
     D.decals(D.TEX.paper(), gnd.paper, { polygonOffsetFactor: -3 }); D.decals(D.TEX.bloodpool(), gnd.pool, { shininess: 40, specular: 0x441111, polygonOffsetFactor: -3 });
     D.decals(D.TEX.drop(), gnd.drop, { shininess: 40, specular: 0x441111, polygonOffsetFactor: -3 }); D.decals(D.TEX.oil(), gnd.oil, { shininess: 90, specular: 0x667788, polygonOffsetFactor: -3 });
   }
@@ -193,6 +194,7 @@
   G.buildLevel1 = function () {
     const m = mats();
     G.have = []; G.objective = 'La clé USB est près du lit. Prends-la, puis descends.';
+    G.isPlayable = null;                                                                  // filet de la grande carte : inutile ici (il te renvoyait dans la tour)
     G.B(-24, 72, -1, 0, -44, 14, M().asphalt, { tile: 3, grime: false });                                    // sol
     const sign = (i) => G.dress.SIGNS[i];
 
