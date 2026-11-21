@@ -22,6 +22,7 @@
     G.loadSettings();
     progress(0.05, 'Rendu'); G.initRender(canvas); await tick();
     progress(0.2, 'Matières : béton, rouille, asphalte'); G.buildMaterials(); await tick();
+    if (G.loadCopModel) { progress(0.3, 'Modèle du policier'); await G.loadCopModel(); }
     if (G.mode === 'sandbox') { progress(0.5, 'Grande carte (ancienne)'); G.buildWorld(); await tick(); progress(0.85, 'Police'); G.initCops(); }
     else if (G.mode === 'lab') { progress(0.5, 'Labo policier'); G.buildBase(); G.buildLab(); await tick(); }
     else { progress(0.5, 'Niveau 1 : chez nous'); G.buildBase(); G.buildTower(); G.buildLevel1(); await tick(); }

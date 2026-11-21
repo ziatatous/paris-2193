@@ -91,13 +91,14 @@
     const ell = (parent, m, x, y, z, rx, ry, rz) => { const q = new T.Mesh(new T.SphereGeometry(1, 14, 10), m); q.position.set(x, y, z); q.scale.set(rx, ry, rz); parent.add(q); return q; };
     const tube = (parent, m, y0, y1, r0, r1, seg) => { const h = y0 - y1, q = new T.Mesh(new T.CylinderGeometry(r0, r1, h, seg || 12, 1), m); q.position.set(0, (y0 + y1) / 2, 0); parent.add(q); return q; };
 
+    const MODEL = !!(G.copModelReady && G.copModelReady());                                          // un modèle 3D riggé fournit le corps : on ne dessine alors que l'habillement
     rig.hips = pivot(g, 0, 0.98, 0);
-    ell(rig.hips, leather, 0, 0.0, 0, 0.2, 0.14, 0.15);                                            // bassin
+    if (!MODEL) ell(rig.hips, leather, 0, 0.0, 0, 0.2, 0.14, 0.15);                                            // bassin
     // Long manteau de cuir : un jupon évasé qui tombe jusqu'aux mollets (porté par le bassin, il balance avec la marche)
     rig.skirt = lathe([[0.19, 0.12], [0.22, 0.0], [0.25, -0.3], [0.29, -0.55], [0.3, -0.6]], 16, leather, rig.hips, 0, 0, 0, 1, 1, 0.82, true);
     rig.torso = pivot(rig.hips, 0, 0.05, 0);
     // Torse : profil lissé (taille -> poitrine -> épaules), aplati d'avant en arrière
-    lathe([[0.15, -0.04], [0.17, 0.12], [0.22, 0.32], [0.25, 0.46], [0.2, 0.56], [0.09, 0.61]], 16, leather, rig.torso, 0, 0, 0, 1.18, 1, 0.78);
+    if (!MODEL) lathe([[0.15, -0.04], [0.17, 0.12], [0.22, 0.32], [0.25, 0.46], [0.2, 0.56], [0.09, 0.61]], 16, leather, rig.torso, 0, 0, 0, 1.18, 1, 0.78);
     // Grand col relevé + revers
     const col = new T.Mesh(new T.CylinderGeometry(0.15, 0.1, 0.12, 14, 1, true), leather2); col.material.side = T.DoubleSide; col.position.set(0, 0.62, -0.01); col.rotation.x = -0.12; rig.torso.add(col);
     for (const sd of [-1, 1]) { const rev = new T.Mesh(new T.BoxGeometry(0.1, 0.34, 0.025), leather2); rev.position.set(sd * 0.1, 0.42, 0.185); rev.rotation.z = sd * 0.28; rev.rotation.y = -sd * 0.25; rig.torso.add(rev); }
@@ -108,7 +109,7 @@
     const holster = new T.Mesh(new T.BoxGeometry(0.07, 0.2, 0.08), black); holster.position.set(0.2, -0.06, 0.04); rig.torso.add(holster);
     const baton = new T.Mesh(new T.CylinderGeometry(0.02, 0.026, 0.5, 8), black); baton.position.set(-0.21, -0.2, 0.03); baton.rotation.z = 0.08; rig.torso.add(baton);
     rig.neck = pivot(rig.torso, 0, 0.62, 0);
-    tube(rig.neck, mask, 0.07, -0.02, 0.055, 0.06, 10);
+    if (!MODEL) tube(rig.neck, mask, 0.07, -0.02, 0.055, 0.06, 10);
     rig.head = pivot(rig.neck, 0, 0.1, 0);
     // Tête : cagoule de cuir, masque à gaz (deux gros verres ronds, museau-filtre), casquette à visière
     ell(rig.head, mask, 0, 0, 0, 0.098, 0.12, 0.105);
@@ -126,19 +127,18 @@
     beam.rotation.x = Math.PI / 2 - 0.5; beam.position.set(0, 0.1, 4.2); rig.head.add(beam); rig.beam = beam;
     for (const sd of [-1, 1]) {
       const sh = pivot(rig.torso, sd * 0.29, 0.5, 0);                                           // épaule
-      ell(sh, leather, 0, 0, 0, 0.085, 0.08, 0.085);
-      const up = new T.Mesh(new T.CylinderGeometry(0.075, 0.058, 0.36, 12), leather); up.position.set(0, -0.18, 0); sh.add(up);                     // bras de manteau (manche large)
-      const el = pivot(sh, 0, -0.36, 0); ell(el, leather, 0, 0, 0, 0.062, 0.06, 0.062);
-      const lo = new T.Mesh(new T.CylinderGeometry(0.06, 0.05, 0.34, 12), leather); lo.position.set(0, -0.17, 0); el.add(lo);
-      ell(el, black, 0, -0.38, 0.01, 0.05, 0.075, 0.04);                                         // main gantée
+      if (!MODEL) ell(sh, leather, 0, 0, 0, 0.085, 0.08, 0.085);
+      if (!MODEL) { const up = new T.Mesh(new T.CylinderGeometry(0.075, 0.058, 0.36, 12), leather); up.position.set(0, -0.18, 0); sh.add(up); }                     // bras de manteau (manche large)
+      const el = pivot(sh, 0, -0.36, 0);
+      if (!MODEL) { ell(el, leather, 0, 0, 0, 0.062, 0.06, 0.062); const lo = new T.Mesh(new T.CylinderGeometry(0.06, 0.05, 0.34, 12), leather); lo.position.set(0, -0.17, 0); el.add(lo); ell(el, black, 0, -0.38, 0.01, 0.05, 0.075, 0.04); }                                         // main gantée
       rig['sh' + sd] = sh; rig['el' + sd] = el;
       const hip = pivot(rig.hips, sd * 0.1, -0.04, 0);                                           // hanche : cuisse sous le manteau
-      const th = new T.Mesh(new T.CylinderGeometry(0.095, 0.07, 0.46, 12), leather2); th.position.set(0, -0.23, 0); hip.add(th);
-      const kn = pivot(hip, 0, -0.46, 0); ell(kn, leather2, 0, 0, 0, 0.07, 0.065, 0.07);
-      const sn = new T.Mesh(new T.CylinderGeometry(0.068, 0.05, 0.44, 12), black); sn.position.set(0, -0.22, 0); kn.add(sn);                     // haute botte de cuir
-      ell(kn, black, 0, -0.47, 0.06, 0.06, 0.045, 0.13);                                         // pied
+      const kn = pivot(hip, 0, -0.46, 0);
+      if (!MODEL) { const th = new T.Mesh(new T.CylinderGeometry(0.095, 0.07, 0.46, 12), leather2); th.position.set(0, -0.23, 0); hip.add(th); ell(kn, leather2, 0, 0, 0, 0.07, 0.065, 0.07); const sn = new T.Mesh(new T.CylinderGeometry(0.068, 0.05, 0.44, 12), black); sn.position.set(0, -0.22, 0); kn.add(sn); }                     // haute botte de cuir
+      if (!MODEL) ell(kn, black, 0, -0.47, 0.06, 0.06, 0.045, 0.13);                                         // pied
       rig['hip' + sd] = hip; rig['kn' + sd] = kn;
     }
+    if (MODEL) G.attachCopModel(g, rig);
     g.userData.rig = rig; g.userData.parts = rig; return g;
   };
 

@@ -223,6 +223,7 @@
     if (r.skirt) { r.skirt.rotation.x = -(r['hip1'].rotation.x + r['hip-1'].rotation.x) * 0.25 - 0.08 * f; r.skirt.rotation.z = s * 0.05 * f; r.skirt.position.y = 0.0; }   // le manteau balance derrière la marche
     r.beam.material.opacity = 0.03 + Math.min(1, c.alert) * 0.05;
     c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.facing;
+    if (r.sync) r.sync();                                                                   // modèle 3D riggé : on copie les poses des pivots sur ses os
     if (c.lamp) { const fx = Math.sin(c.facing + r.head.rotation.y), fz = Math.cos(c.facing + r.head.rotation.y); c.lamp.pos.set(c.x + fx * 0.9, c.y + 1.7, c.z + fz * 0.9); }   // la lampe frontale éclaire là où il regarde
   }
 

@@ -5,9 +5,11 @@ Usage :  python3 build.py
 """
 import base64, os, re
 from manifest import make_manifest
-FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'places', 'dressing', 'cops', 'levels', 'player', 'audio', 'game']   # même ordre que dans index.html
+FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'levels', 'player', 'audio', 'game']   # même ordre que dans index.html
 html = open('index.html', encoding='utf-8').read()
 bundle = ''.join('<script>\n/* ---- js/%s.js ---- */\n%s\n</script>\n' % (f, open('js/%s.js' % f, encoding='utf-8').read()) for f in FILES)
+if os.path.exists('assets/models/cop.glb'):    # le modèle du policier est intégré (base64) : plus besoin de serveur local pour lui
+    bundle = '<script>window.COP_GLB_B64="%s";</script>\n' % base64.b64encode(open('assets/models/cop.glb', 'rb').read()).decode() + bundle
 assert '<!--BUNDLE-->' in html
 out = html.replace('<!--BUNDLE-->', bundle)
 # L'image du menu est intégrée au fichier (data URI) pour que la version tout-en-un soit autonome

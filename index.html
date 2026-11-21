@@ -110,7 +110,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'places', 'dressing', 'cops', 'levels', 'player', 'audio', 'game'];
+  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'levels', 'player', 'audio', 'game'];
   const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };
