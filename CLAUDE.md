@@ -48,6 +48,9 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Choix important (architecture, outil) : proposer 2 options et en recommander une.
 
 ## DÉCISIONS PRISES
+- **[CHANGEMENT MAJEUR] Passage de Godot à JavaScript dans le navigateur** : Three.js (r128, cdnjs) + Web Audio, un seul fichier `index.html`. Raison : Godot trop lourd à installer/lancer pour l'utilisateur ; le navigateur donne un résultat direct (lien cliquable), sons et musique générés par code sans fichiers. Claude peut aussi tester avec Chromium/Playwright (captures d'écran). Le code Godot (étapes 1-2) est archivé dans `godot-archive/`. Les décisions « Godot » ci-dessous sont historiques.
+- Le jeu est publié comme Artifact claude.ai (lien jouable) et versionné ici. Pour la republication : retirer la ligne `<!doctype html>` du fichier avant de publier (l'Artifact ajoute son propre squelette).
+- Test local : `three.min.js` r128 depuis npm (`npm pack three@0.128.0`), redirigé par Playwright à la place du CDN (le conteneur n'accède pas à cdnjs).
 - **Godot 4.7.2 stable** (version de l'utilisateur, à viser pour toute API), GDScript. Renderer **Forward+/Mobile non imposé** : on vise `gl_compatibility` pour la compatibilité large (PC modestes) — à revoir si besoin.
 - Structure : `scenes/` (.tscn), `scripts/` (.gd). Scènes construites au maximum **par code** (peu de fichiers .tscn à écrire à la main, moins d'erreurs sans éditeur).
 - Contrôles : ZQSD (AZERTY, via touches physiques) + souris, Shift sprint, Espace saut, Échap libère la souris.
@@ -57,6 +60,7 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Ruelle : `scripts/alley.gd` (boîtes/cylindres), z=+20 départ -> z=-20 fond, 4 m de large. Zone libre côté gauche vers z=-10 réservée au corps.
 
 ## ÉTAPES
+(Version web : prototype complet livré d'un coup — ruelle, brouillard, néons qui grésillent, corps, son 3D, musique générative, scène de peur. À valider par l'utilisateur.)
 - [x] Étape 1 — Projet + joueur FPS dans une salle de test.
 - [x] Étape 2 — Ruelle (primitives, textures procédurales nearest, rendu basse résolution PS1). (étape 1 validée par l'utilisateur)
 - [ ] Étape 3 — Brouillard, lumière faible, néons qui grésillent.
