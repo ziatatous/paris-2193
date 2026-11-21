@@ -83,7 +83,7 @@
   // Chaque articulation est un "pivot" (Group) qu'on tourne pour animer ; le dessin est dans cops.js (animate).
   G.makeCop = function () {
     const g = new T.Group(), P = (c, s) => new T.MeshPhongMaterial({ color: c, shininess: s === undefined ? 6 : s });
-    const uni = P(0x1c2228), vest = P(0x2c343b), helm = P(0x101418), skin = P(0x6d625c), boot = P(0x08090a), glove = P(0x0c0e10), metal = P(0x252b31, 30);
+    const uni = P(0x14181b, 2), vest = P(0x1f2529, 2), helm = P(0x0c0f11, 2), skin = P(0x6a6a62, 2), boot = P(0x060707), glove = P(0x090a0b), metal = P(0x1c2125, 12), coat = P(0x101315, 1), stain = P(0x2a1412, 1);
     const rig = {}, pivot = (parent, x, y, z) => { const q = new T.Group(); q.position.set(x, y, z); parent.add(q); return q; };
     rig.hips = pivot(g, 0, 0.98, 0);                                                           // bassin (le point qui monte et descend à la marche)
     G.ball(rig.hips, uni, [0, 0.02, 0], 0.17, 1.2, 0.7, 0.9, 8);
@@ -93,18 +93,21 @@
     const holster = new T.Mesh(new T.BoxGeometry(0.08, 0.2, 0.1), glove); holster.position.set(0.22, 0.0, 0.02); rig.torso.add(holster);
     const radio = new T.Mesh(new T.BoxGeometry(0.07, 0.13, 0.05), metal); radio.position.set(-0.2, 0.46, 0.12); rig.torso.add(radio);         // radio d'épaule
     const ant = new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.2, 4), glove); ant.position.set(-0.2, 0.62, 0.12); rig.torso.add(ant);
+    G.limb(rig.hips, coat, [0, 0.12, 0], [0, -0.58, 0], 0.24, 0.3, 8);                         // pan de manteau usé qui pend sur les cuisses
+    const patch = new T.Mesh(new T.BoxGeometry(0.2, 0.28, 0.02), stain); patch.position.set(-0.06, 0.28, 0.2); patch.rotation.z = 0.3; rig.torso.add(patch);   // tache sombre sur le gilet
     rig.neck = pivot(rig.torso, 0, 0.62, 0);
     rig.head = pivot(rig.neck, 0, 0.1, 0);
-    G.ball(rig.head, skin, [0, 0.0, 0], 0.105, 0.9, 1.05, 1, 10); G.ball(rig.head, helm, [0, 0.06, -0.005], 0.14, 1, 0.78, 1.08, 10);   // visage et casque
+    G.ball(rig.head, skin, [0, 0.0, 0], 0.105, 0.85, 1.15, 1, 10); G.ball(rig.head, helm, [0, 0.06, -0.005], 0.14, 1, 0.78, 1.08, 10);   // visage et casque
     const visor = new T.Mesh(new T.BoxGeometry(0.19, 0.045, 0.05), P(0x20282e, 40)); visor.position.set(0, 0.015, 0.095); rig.head.add(visor);
     const lampBody = new T.Mesh(new T.CylinderGeometry(0.025, 0.03, 0.06, 6), metal); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0.07, 0.08, 0.13); rig.head.add(lampBody);   // lampe frontale
     const beam = new T.Mesh(new T.CylinderGeometry(1.1, 0.03, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
-    beam.rotation.x = Math.PI / 2 + 0.1; beam.position.set(0.07, 0.04, 4.1); rig.head.add(beam); rig.beam = beam;                               // faisceau visible dans la brume
+    beam.rotation.x = Math.PI / 2 - 0.5;   // relevé : la tête est penchée vers l'avant, le faisceau doit rester à peu près horizontal
+     beam.position.set(0.07, 0.04, 4.1); rig.head.add(beam); rig.beam = beam;                               // faisceau visible dans la brume
     for (const s of [-1, 1]) {
       const sh = pivot(rig.torso, s * 0.3, 0.5, 0);                                              // épaule
-      G.limb(sh, uni, [0, 0, 0], [0, -0.3, 0], 0.075, 0.062, 6); G.ball(sh, vest, [0, 0, 0], 0.085, 1, 1, 1, 6);
-      const el = pivot(sh, 0, -0.3, 0); G.limb(el, uni, [0, 0, 0], [0, -0.28, 0], 0.062, 0.05, 6);   // coude
-      G.ball(el, glove, [0, -0.31, 0.01], 0.055, 0.9, 1.1, 1, 6);
+      G.limb(sh, uni, [0, 0, 0], [0, -0.36, 0], 0.07, 0.055, 6); G.ball(sh, vest, [0, 0, 0], 0.085, 1, 1, 1, 6);
+      const el = pivot(sh, 0, -0.36, 0); G.limb(el, uni, [0, 0, 0], [0, -0.36, 0], 0.055, 0.042, 6);   // coude (bras longs, maigres)
+      G.ball(el, skin, [0, -0.4, 0.01], 0.05, 0.8, 1.35, 0.9, 6);
       rig['sh' + s] = sh; rig['el' + s] = el;
       const hip = pivot(rig.hips, s * 0.11, -0.04, 0);                                            // hanche
       G.limb(hip, uni, [0, 0, 0], [0, -0.45, 0], 0.1, 0.075, 6);

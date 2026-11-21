@@ -148,3 +148,9 @@ Carte v2 implémentée + dressing Outlast + police (voir plus haut). Avant : car
 - Niveaux prévus : 2 « Le marché » (furtivité), 3 « Les toits » (parkour, drone), 4 **égouts jusqu'au garage** (choix de l'utilisateur).
 - Idée à garder : brancher la clé sur un ordinateur, pirater la GLACE (plongée en vecteurs, backlog 3).
 - Tests : `G.cops.length=0` + AmbientLight pour voir les façades ; vérifié : chargement sans erreur, clé -> cachette -> livraison -> reset, arrestation -> reset.
+
+## RETOURS v8 (utilisateur) et décisions
+- Boîtes blanches = matériau `G.mat.dumpster` manquant (corrigé). Flics : **style Silent Hill** (voûtés, démarche traînante/boiteuse, tics, bras pendants/tendus en poursuite), **beaucoup plus lents** (patrouille 0,8 / enquête 1,3 / fouille 1,2 / poursuite 3,6 ; `G.COP_SPEED`), plus sales. Figurants = même rig (`G.makeCop`).
+- **LABO POLICIER** (bouton du menu, `G.mode='lab'`, `G.buildLab` dans levels.js) : sol plat, un flic, touches 1-5 états, 6/7 vitesse, 8/9 +/- flics, 0 pause ; pas d'arrestation.
+- **Brume** : même distance de vue, mais nappes (`G.addFogSheets`, 4 plans qui dérivent près du sol). Densité inchangée.
+- **Carte à refaire (à valider en ASCII avant)** : sensation claustro permanente (pas forcément de gros immeubles : éléments qui rétrécissent le passage), couloirs 2-3 m, tracé qui tourne/se replie, culs-de-sac, pas de lignes droites, cour plus petite et encombrée, plein de détails légers (instanciés). **Graffitis : plus tard** (l'utilisateur fournira des modèles visuels).

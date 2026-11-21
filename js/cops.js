@@ -12,7 +12,7 @@
 (function () {
   'use strict';
   const G = window.G, T = G.T;
-  const R = 0.4, STEP = 1.1, SPEED = { patrol: 1.4, investigate: 2.4, chase: 5.2, search: 2.2 };
+  const R = 0.4, STEP = 1.1, SPEED = G.COP_SPEED = { patrol: 0.8, investigate: 1.3, chase: 3.6, search: 1.2 };   // lents et traînants (réglables dans le labo)
   const cops = G.cops = []; G.alert = 0; G.frozen = false; G.arrest = null;
   let nodes = [], adj = [];
   const snd = (n, a, b) => { const f = G.audio && G.audio[n]; if (f) f(a, b); };
@@ -182,32 +182,42 @@
   // Animation : le squelette (places.js, G.makeCop) est animé à la main. Rotation x positive = le haut part vers l'avant, un pied part vers l'arrière.
   function animate(c, dt) {
     const r = c.g.userData.rig, t = performance.now() / 1000 + c.seed, run = c.state === 'chase', sus = c.state === 'suspicious' || c.state === 'search';
-    const f = G.clamp(c.speed / (run ? 6 : 2.4), 0, 1);                                    // 0 = immobile, 1 = pleine allure
-    c.phase += c.speed * dt * (run ? 1.35 : 1.9); c.shoutT = Math.max(0, (c.shoutT || 0) - dt);
-    const s = Math.sin(c.phase), amp = (run ? 0.95 : 0.5) * f, idle = f < 0.1;
-    // Jambes : la cuisse balance, le genou se plie quand la jambe passe vers l'avant
+    const f = G.clamp(c.speed / (run ? SPEED.chase : SPEED.investigate), 0, 1);           // 0 = immobile, 1 = pleine allure
+    c.phase += c.speed * dt * (run ? 1.25 : 1.7); c.shoutT = Math.max(0, (c.shoutT || 0) - dt);
+    const s = Math.sin(c.phase), s2 = Math.sin(c.phase * 2), idle = f < 0.1, amp = (run ? 0.7 : 0.38) * f;
+    // Tics nerveux : de temps en temps le corps a un spasme (tête, épaule), plus souvent quand il se méfie
+    c.tw = (c.tw || 0) * Math.max(0, 1 - dt * 5); c.twT = (c.twT === undefined ? 1 + Math.random() * 3 : c.twT) - dt;
+    if (c.twT <= 0) { c.tw = 1; c.twT = (sus ? 0.6 : 1.8) + Math.random() * (run ? 1.5 : 3.5); c.twDir = Math.random() < 0.5 ? -1 : 1; }
+    const tw = c.tw, jit = Math.sin(t * 43) * tw;
+    // Jambes : démarche traînante et boiteuse (la jambe droite traîne, le pied racle)
     for (const side of [1, -1]) {
-      const ph = side === 1 ? s : -s;
-      r['hip' + side].rotation.x = ph * amp - (sus && !run ? 0.08 : 0);
-      r['kn' + side].rotation.x = Math.max(0, -ph) * amp * 1.5 + (run ? 0.2 : 0.05 * f) + (idle ? 0 : 0);
+      const ph = side === 1 ? s : -s, limp = side === 1 ? 0.6 : 1.0;
+      r['hip' + side].rotation.x = ph * amp * limp + (side === 1 ? -0.05 * f : 0);
+      r['kn' + side].rotation.x = Math.max(0, -ph) * amp * 1.1 * limp + 0.06 * f;
+      r['hip' + side].rotation.z = side * 0.04 * f;
     }
-    // Bassin : monte et descend à chaque pas, se balance ; accroupi quand il se méfie
-    r.hips.position.y = 0.98 + Math.abs(Math.cos(c.phase)) * 0.045 * f * (run ? 1.8 : 1) - (sus ? 0.07 : 0) - (run ? 0.04 : 0);
-    r.hips.position.x = Math.sin(c.phase) * 0.025 * f + Math.sin(t * 0.4) * 0.03 * (idle ? 1 : 0);                       // à l'arrêt : il se déhanche, change d'appui
-    // Torse : se tord avec la marche, se penche en courant, respire
-    r.torso.rotation.y = -s * 0.15 * f + (c.shoutT > 0 ? 0.25 : 0); r.torso.rotation.x = (run ? 0.3 : sus ? 0.1 : 0) + Math.sin(t * 1.6) * 0.012; r.torso.scale.y = 1 + Math.sin(t * 1.6) * 0.012;
-    // Bras : en opposition aux jambes ; coudes pliés (très pliés en courant)
-    let armR = -r.hip1.rotation.x * 0.0 + (-1) * (-s) * amp * 0.9, armL = -s * amp * 0.9; armR = s * amp * 0.9;
-    r['sh1'].rotation.x = armR; r['sh-1'].rotation.x = -armR;
-    r['el1'].rotation.x = -(run ? 1.25 : 0.25 + 0.15 * f); r['el-1'].rotation.x = -(run ? 1.25 : 0.25 + 0.15 * f);
-    // Attitudes à l'arrêt : radio à l'épaule de temps en temps ; main près de l'étui quand il se méfie ; geste vers le joueur quand il crie
-    const radio = idle && c.state === 'idle' && ((t * 0.5 + c.seed) % 6) < 1.4;
-    if (radio) { r['sh1'].rotation.x = -2.1; r['el1'].rotation.x = -1.7; r.head.rotation.z = 0.12; } else r.head.rotation.z = 0;
-    if (sus && !run) { r['sh1'].rotation.x = -0.35; r['el1'].rotation.x = -0.5; r['sh-1'].rotation.x = -0.6; r['el-1'].rotation.x = -0.9; }
-    if (c.shoutT > 0) { r['sh1'].rotation.x = -1.55; r['el1'].rotation.x = -0.15; r.head.rotation.x = -0.15; } else r.head.rotation.x = run ? 0.05 : 0;
+    // Bassin : balance de côté, tombe lourdement sur la jambe valide, s'affaisse à l'arrêt
+    r.hips.position.y = 0.98 - Math.abs(Math.sin(c.phase)) * 0.05 * f - (sus ? 0.09 : 0) - (run ? 0.06 : 0);
+    r.hips.position.x = s * 0.05 * f + Math.sin(t * 0.37) * 0.035 * (idle ? 1 : 0);
+    r.hips.rotation.z = s * 0.07 * f + Math.sin(t * 0.37) * 0.03 * (idle ? 1 : 0);
+    // Torse : voûté en permanence (penché vers l'avant), tordu par la marche, respiration lourde
+    const lean = 0.28 + (run ? 0.3 : 0) + (sus ? 0.08 : 0);
+    r.torso.rotation.x = lean + Math.sin(t * 1.3) * 0.025 + tw * 0.06; r.torso.rotation.y = -s * 0.18 * f + tw * 0.12 * c.twDir; r.torso.rotation.z = -s * 0.06 * f;
+    r.torso.scale.y = 1 + Math.sin(t * 1.3) * 0.015;
+    // Bras : pendants, lourds, qui balancent en retard ; en poursuite ils se tendent devant lui comme pour t'attraper
+    const sw = s * amp * 0.55;
+    if (run) { r['sh1'].rotation.x = -0.85 + s2 * 0.12 + sw * 0.4; r['sh-1'].rotation.x = -0.7 - s2 * 0.12 - sw * 0.4; r['el1'].rotation.x = -0.35; r['el-1'].rotation.x = -0.5; r['sh1'].rotation.z = -0.1; r['sh-1'].rotation.z = 0.1; }
+    else if (sus) { r['sh1'].rotation.x = -0.25 + sw; r['sh-1'].rotation.x = -0.15 - sw; r['el1'].rotation.x = -0.5; r['el-1'].rotation.x = -0.35; r['sh1'].rotation.z = -0.08; r['sh-1'].rotation.z = 0.08; }
+    else { r['sh1'].rotation.x = 0.05 + sw + Math.sin(t * 0.8) * 0.03; r['sh-1'].rotation.x = 0.1 - sw; r['el1'].rotation.x = -0.12 - 0.1 * f; r['el-1'].rotation.x = -0.1 - 0.1 * f; r['sh1'].rotation.z = -0.05; r['sh-1'].rotation.z = 0.05; }
+    r['sh1'].rotation.z += jit * 0.08; r['sh-1'].rotation.z -= jit * 0.05;
+    if (c.shoutT > 0) { r['sh1'].rotation.x = -1.5; r['el1'].rotation.x = -0.1; }                 // il te désigne du bras
     if (G.arrest && run) { r['sh1'].rotation.x = -1.2; r['sh-1'].rotation.x = -1.2; r['el1'].rotation.x = -0.4; r['el-1'].rotation.x = -0.4; }
-    // Tête : balayage lent à l'arrêt, plus nerveux quand il se méfie, fixe en courant
-    r.head.rotation.y = run ? 0 : sus ? Math.sin(t * 2.2) * 0.9 : Math.sin(t * 0.6) * 0.55;
+    // Tête : lourde, en retard sur le corps, penchée ; balayage lent, saccadé quand il se méfie ; rejetée en arrière quand il crie
+    const ty = run ? Math.sin(t * 3) * 0.12 : sus ? Math.sin(t * 1.6) * 0.8 + Math.sign(Math.sin(t * 0.9)) * 0.25 : Math.sin(t * 0.45) * 0.5;
+    c.hy = (c.hy || 0) + (ty - (c.hy || 0)) * Math.min(1, dt * (sus ? 5 : 2));
+    r.head.rotation.y = c.hy + tw * 0.25 * c.twDir; r.head.rotation.z = (run ? 0.22 : 0.12) * Math.sin(t * 0.7 + 1) + 0.12 + jit * 0.1;
+    r.head.rotation.x = (c.shoutT > 0 ? -0.5 : 0.18 + (run ? 0.1 : 0)) + Math.sin(t * 1.1) * 0.03;
+    r.neck.rotation.x = 0.25;
     r.beam.material.opacity = 0.03 + Math.min(1, c.alert) * 0.05;
     c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.facing;
     if (c.lamp) { const fx = Math.sin(c.facing + r.head.rotation.y), fz = Math.cos(c.facing + r.head.rotation.y); c.lamp.pos.set(c.x + fx * 0.9, c.y + 1.7, c.z + fz * 0.9); }   // la lampe frontale éclaire là où il regarde
@@ -215,6 +225,7 @@
 
   function arrest(c) {
     if (G.arrest) return;
+    if (G.mode === 'lab') { G.say && G.say('(labo : arrestation ignorée)', 1200); c.alert = 0.5; c.state = 'search'; c.searchT = 3; return; }
     G.arrest = { t: 0 }; G.frozen = true; const P = G.P; P.vx = P.vz = 0;
     snd('fx', 'arrest', 1); G.say && G.say('ARRÊTÉ', 900);
     const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.25s'; f.style.opacity = 1; }
@@ -236,7 +247,7 @@
       }
     }
     let top = 0;
-    for (const c of cops) { think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
+    for (const c of cops) { if (!c.frozenLab) think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
     G.alert += (top - G.alert) * Math.min(1, dt * 3);
   };
 

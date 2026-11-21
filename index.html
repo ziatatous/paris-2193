@@ -73,6 +73,7 @@
     <p class="sub">PROTOTYPE &nbsp;·&nbsp; v3</p>
     <button id="b-play">JOUER</button>
     <button id="b-sandbox">GRANDE CARTE (ancienne)</button>
+    <button id="b-lab">LABO POLICIER (test)</button>
     <button id="b-opt">OPTIONS</button>
   </div>
   <div class="panel" id="p-opt" hidden>
@@ -154,6 +155,7 @@
   }
   $('b-play').addEventListener('click', () => launch('level'));
   $('b-sandbox').addEventListener('click', () => launch('sandbox'));
+  $('b-lab').addEventListener('click', () => launch('lab'));
   $('enter').addEventListener('click', () => { $('enter').hidden = true; G.start(); });
 })();
 </script>

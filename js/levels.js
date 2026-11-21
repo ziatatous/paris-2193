@@ -268,6 +268,67 @@
     G.addCop(G.makeCop(), [-8, -14], 0, [[-8, -14], [8, -14]]);
     G.addCop(G.makeCop(), [55.5, -11.5], -Math.PI / 2 - 0.3, null);
     G.buildNavGrid(-16, 64, -30, -1, 1);
+    G.addFogSheets();
+  };
+
+
+
+  // NAPPES DE BRUME : quelques grands plans transparents près du sol, qui dérivent. Ils suivent le joueur mais la texture est
+  // calée sur le monde, donc on voit la brume « épaisse » sans réduire la distance de vue (la densité du brouillard ne change pas).
+  G.addFogSheets = function () {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), im = g.createImageData(128, 128);
+    const n = (x, y, k) => { let v = 0, a = 1, f = 4 * k, tot = 0; for (let o = 0; o < 4; o++) { const X = x * f, Y = y * f, ix = Math.floor(X), iy = Math.floor(Y), fx = X - ix, fy = Y - iy, h = (i, j) => { const q = Math.sin(((i % (4 * k * (1 << o))) * 127.1 + (j % (4 * k * (1 << o))) * 311.7 + o * 17) * 43758.5453); return q - Math.floor(q); };
+      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy); v += a * ((h(ix, iy) * (1 - sx) + h(ix + 1, iy) * sx) * (1 - sy) + (h(ix, iy + 1) * (1 - sx) + h(ix + 1, iy + 1) * sx) * sy); tot += a; a *= 0.5; f *= 2; } return v / tot; };
+    for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) { const v = Math.max(0, n(x / 128, y / 128, 1) - 0.38) * 2.4, i = (y * 128 + x) * 4; im.data[i] = 150; im.data[i + 1] = 165; im.data[i + 2] = 170; im.data[i + 3] = Math.min(255, v * 255); }
+    g.putImageData(im, 0, 0);
+    const tex = new T.CanvasTexture(cv); tex.wrapS = tex.wrapT = T.RepeatWrapping;
+    const sheets = [];
+    [[0.25, 0.20, 1], [0.7, 0.16, 0.8], [1.2, 0.13, 1.3], [1.8, 0.10, 0.9]].forEach(([y, op, sc], i) => {
+      const m = new T.Mesh(new T.PlaneGeometry(90, 90), new T.MeshBasicMaterial({ map: tex.clone(), transparent: true, opacity: op, depthWrite: false, fog: true }));
+      m.material.map.needsUpdate = true; m.material.map.wrapS = m.material.map.wrapT = T.RepeatWrapping; m.material.map.repeat.set(3 * sc, 3 * sc);
+      m.rotation.x = -Math.PI / 2; m.renderOrder = 2; G.scene.add(m); sheets.push({ m, y, sc, i });
+    });
+    G.animated.push({ update(dt) {
+      const P = G.P, t = performance.now() / 1000; if (!P) return;
+      for (const s of sheets) {
+        const baseY = (P.pos.y > 5 ? 9 : 0);
+        s.m.position.set(P.pos.x, baseY + s.y, P.pos.z);
+        const rep = 3 * s.sc, k = rep / 90, dr = (s.i % 2 ? 1 : -1) * t * 0.012;
+        s.m.material.map.offset.set(P.pos.x * k + dr, -P.pos.z * k + t * 0.007 * (s.i + 1));
+      }
+    } });
+  };
+
+  /* ---------------------------------------------------------------
+     LABO POLICIER : un grand sol plat dans la brume, un policier, des raccourcis clavier. Sert à régler le corps,
+     la démarche et la vitesse SANS jouer le niveau. (Aucune arrestation.)
+     --------------------------------------------------------------- */
+  G.buildLab = function () {
+    G.isPlayable = null; G.have = []; G.objective = '';
+    G.B(-40, 40, -1, 0, -40, 40, M().asphalt, { tile: 3, grime: false });
+    crate(-4, -4, 1.0, 0.9); crate(4, -9, 1.0, 0.9); lowWall(-2, 2, -14, -13.4); fireBarrel(8, -3);
+    lamp(0, 3.6, -20, { I: 0.9, dist: 14 });
+    const c = G.addCop(G.makeCop(), [0, -12], 0, [[-8, -12], [8, -12]]);
+    G.buildNavGrid(-30, 30, -30, 30, 1);
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:12px;top:12px;z-index:5;font:12px/1.5 monospace;color:#9aa;background:rgba(0,0,0,.55);padding:8px 10px;pointer-events:none;white-space:pre';
+    document.body.appendChild(box);
+    const sp = G.COP_SPEED, base = Object.assign({}, sp); let mult = 1, paused = false, n = 1;
+    G.animated.push({ update() { box.textContent = 'LABO POLICIER\n1 calme  2 méfiant  3 poursuite  4 fouille  5 crie\n6/7 vitesse -/+ (x' + mult.toFixed(2) + ')  8 +1 flic  9 -1 flic  0 pause\nétat: ' + (G.cops[0] ? G.cops[0].state : '-') + '  flics: ' + G.cops.length; } });
+    addEventListener('keydown', e => {
+      const k = e.code.replace('Digit', '').replace('Numpad', ''), P = G.P, cs = G.cops;
+      if (k === '6' || k === '7') { mult = G.clamp(mult * (k === '7' ? 1.25 : 0.8), 0.25, 3); for (const q in base) sp[q] = base[q] * mult; }
+      else if (k === '0') { paused = !paused; for (const q of cs) q.frozenLab = paused; }
+      else if (k === '8') { const q = G.addCop(G.makeCop(), [(Math.random() - 0.5) * 16, -14 - Math.random() * 6], 0, null); q.state = 'idle'; n++; }
+      else if (k === '9' && cs.length > 1) { const q = cs.pop(); G.scene.remove(q.g); if (q.lamp) q.lamp.I = 0; }
+      else if (/^[1-5]$/.test(k)) for (const q of cs) {
+        q.last = [P.pos.x, P.pos.z]; q.path = []; q.pathT = 0;
+        if (k === '1') { q.state = 'idle'; q.alert = 0; } else if (k === '2') { q.state = 'suspicious'; q.alert = 0.6; } else if (k === '3') { q.state = 'chase'; q.alert = 1; q.lostT = 0; }
+        else if (k === '4') { q.state = 'search'; q.alert = 0.8; q.searchT = 10; } else if (k === '5') { q.shoutT = 1.6; }
+      }
+    });
+    const P = G.P; if (P) { P.pos.set(0, 0, 4); P.safe.set(0, 0, 4); P.yaw = 0; }
+    G.labStart = [0, 0, 4]; G.addFogSheets();
   };
 
   /* ---------------------------------------------------------------

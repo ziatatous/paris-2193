@@ -72,6 +72,7 @@
     <p class="sub">PROTOTYPE &nbsp;·&nbsp; v3</p>
     <button id="b-play">JOUER</button>
     <button id="b-sandbox">GRANDE CARTE (ancienne)</button>
+    <button id="b-lab">LABO POLICIER (test)</button>
     <button id="b-opt">OPTIONS</button>
   </div>
   <div class="panel" id="p-opt" hidden>
@@ -1103,7 +1104,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   // Chaque articulation est un "pivot" (Group) qu'on tourne pour animer ; le dessin est dans cops.js (animate).
   G.makeCop = function () {
     const g = new T.Group(), P = (c, s) => new T.MeshPhongMaterial({ color: c, shininess: s === undefined ? 6 : s });
-    const uni = P(0x1c2228), vest = P(0x2c343b), helm = P(0x101418), skin = P(0x6d625c), boot = P(0x08090a), glove = P(0x0c0e10), metal = P(0x252b31, 30);
+    const uni = P(0x14181b, 2), vest = P(0x1f2529, 2), helm = P(0x0c0f11, 2), skin = P(0x6a6a62, 2), boot = P(0x060707), glove = P(0x090a0b), metal = P(0x1c2125, 12), coat = P(0x101315, 1), stain = P(0x2a1412, 1);
     const rig = {}, pivot = (parent, x, y, z) => { const q = new T.Group(); q.position.set(x, y, z); parent.add(q); return q; };
     rig.hips = pivot(g, 0, 0.98, 0);                                                           // bassin (le point qui monte et descend à la marche)
     G.ball(rig.hips, uni, [0, 0.02, 0], 0.17, 1.2, 0.7, 0.9, 8);
@@ -1113,18 +1114,21 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const holster = new T.Mesh(new T.BoxGeometry(0.08, 0.2, 0.1), glove); holster.position.set(0.22, 0.0, 0.02); rig.torso.add(holster);
     const radio = new T.Mesh(new T.BoxGeometry(0.07, 0.13, 0.05), metal); radio.position.set(-0.2, 0.46, 0.12); rig.torso.add(radio);         // radio d'épaule
     const ant = new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.2, 4), glove); ant.position.set(-0.2, 0.62, 0.12); rig.torso.add(ant);
+    G.limb(rig.hips, coat, [0, 0.12, 0], [0, -0.58, 0], 0.24, 0.3, 8);                         // pan de manteau usé qui pend sur les cuisses
+    const patch = new T.Mesh(new T.BoxGeometry(0.2, 0.28, 0.02), stain); patch.position.set(-0.06, 0.28, 0.2); patch.rotation.z = 0.3; rig.torso.add(patch);   // tache sombre sur le gilet
     rig.neck = pivot(rig.torso, 0, 0.62, 0);
     rig.head = pivot(rig.neck, 0, 0.1, 0);
-    G.ball(rig.head, skin, [0, 0.0, 0], 0.105, 0.9, 1.05, 1, 10); G.ball(rig.head, helm, [0, 0.06, -0.005], 0.14, 1, 0.78, 1.08, 10);   // visage et casque
+    G.ball(rig.head, skin, [0, 0.0, 0], 0.105, 0.85, 1.15, 1, 10); G.ball(rig.head, helm, [0, 0.06, -0.005], 0.14, 1, 0.78, 1.08, 10);   // visage et casque
     const visor = new T.Mesh(new T.BoxGeometry(0.19, 0.045, 0.05), P(0x20282e, 40)); visor.position.set(0, 0.015, 0.095); rig.head.add(visor);
     const lampBody = new T.Mesh(new T.CylinderGeometry(0.025, 0.03, 0.06, 6), metal); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0.07, 0.08, 0.13); rig.head.add(lampBody);   // lampe frontale
     const beam = new T.Mesh(new T.CylinderGeometry(1.1, 0.03, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
-    beam.rotation.x = Math.PI / 2 + 0.1; beam.position.set(0.07, 0.04, 4.1); rig.head.add(beam); rig.beam = beam;                               // faisceau visible dans la brume
+    beam.rotation.x = Math.PI / 2 - 0.5;   // relevé : la tête est penchée vers l'avant, le faisceau doit rester à peu près horizontal
+     beam.position.set(0.07, 0.04, 4.1); rig.head.add(beam); rig.beam = beam;                               // faisceau visible dans la brume
     for (const s of [-1, 1]) {
       const sh = pivot(rig.torso, s * 0.3, 0.5, 0);                                              // épaule
-      G.limb(sh, uni, [0, 0, 0], [0, -0.3, 0], 0.075, 0.062, 6); G.ball(sh, vest, [0, 0, 0], 0.085, 1, 1, 1, 6);
-      const el = pivot(sh, 0, -0.3, 0); G.limb(el, uni, [0, 0, 0], [0, -0.28, 0], 0.062, 0.05, 6);   // coude
-      G.ball(el, glove, [0, -0.31, 0.01], 0.055, 0.9, 1.1, 1, 6);
+      G.limb(sh, uni, [0, 0, 0], [0, -0.36, 0], 0.07, 0.055, 6); G.ball(sh, vest, [0, 0, 0], 0.085, 1, 1, 1, 6);
+      const el = pivot(sh, 0, -0.36, 0); G.limb(el, uni, [0, 0, 0], [0, -0.36, 0], 0.055, 0.042, 6);   // coude (bras longs, maigres)
+      G.ball(el, skin, [0, -0.4, 0.01], 0.05, 0.8, 1.35, 0.9, 6);
       rig['sh' + s] = sh; rig['el' + s] = el;
       const hip = pivot(rig.hips, s * 0.11, -0.04, 0);                                            // hanche
       G.limb(hip, uni, [0, 0, 0], [0, -0.45, 0], 0.1, 0.075, 6);
@@ -1507,7 +1511,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
 (function () {
   'use strict';
   const G = window.G, T = G.T;
-  const R = 0.4, STEP = 1.1, SPEED = { patrol: 1.4, investigate: 2.4, chase: 5.2, search: 2.2 };
+  const R = 0.4, STEP = 1.1, SPEED = G.COP_SPEED = { patrol: 0.8, investigate: 1.3, chase: 3.6, search: 1.2 };   // lents et traînants (réglables dans le labo)
   const cops = G.cops = []; G.alert = 0; G.frozen = false; G.arrest = null;
   let nodes = [], adj = [];
   const snd = (n, a, b) => { const f = G.audio && G.audio[n]; if (f) f(a, b); };
@@ -1677,32 +1681,42 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   // Animation : le squelette (places.js, G.makeCop) est animé à la main. Rotation x positive = le haut part vers l'avant, un pied part vers l'arrière.
   function animate(c, dt) {
     const r = c.g.userData.rig, t = performance.now() / 1000 + c.seed, run = c.state === 'chase', sus = c.state === 'suspicious' || c.state === 'search';
-    const f = G.clamp(c.speed / (run ? 6 : 2.4), 0, 1);                                    // 0 = immobile, 1 = pleine allure
-    c.phase += c.speed * dt * (run ? 1.35 : 1.9); c.shoutT = Math.max(0, (c.shoutT || 0) - dt);
-    const s = Math.sin(c.phase), amp = (run ? 0.95 : 0.5) * f, idle = f < 0.1;
-    // Jambes : la cuisse balance, le genou se plie quand la jambe passe vers l'avant
+    const f = G.clamp(c.speed / (run ? SPEED.chase : SPEED.investigate), 0, 1);           // 0 = immobile, 1 = pleine allure
+    c.phase += c.speed * dt * (run ? 1.25 : 1.7); c.shoutT = Math.max(0, (c.shoutT || 0) - dt);
+    const s = Math.sin(c.phase), s2 = Math.sin(c.phase * 2), idle = f < 0.1, amp = (run ? 0.7 : 0.38) * f;
+    // Tics nerveux : de temps en temps le corps a un spasme (tête, épaule), plus souvent quand il se méfie
+    c.tw = (c.tw || 0) * Math.max(0, 1 - dt * 5); c.twT = (c.twT === undefined ? 1 + Math.random() * 3 : c.twT) - dt;
+    if (c.twT <= 0) { c.tw = 1; c.twT = (sus ? 0.6 : 1.8) + Math.random() * (run ? 1.5 : 3.5); c.twDir = Math.random() < 0.5 ? -1 : 1; }
+    const tw = c.tw, jit = Math.sin(t * 43) * tw;
+    // Jambes : démarche traînante et boiteuse (la jambe droite traîne, le pied racle)
     for (const side of [1, -1]) {
-      const ph = side === 1 ? s : -s;
-      r['hip' + side].rotation.x = ph * amp - (sus && !run ? 0.08 : 0);
-      r['kn' + side].rotation.x = Math.max(0, -ph) * amp * 1.5 + (run ? 0.2 : 0.05 * f) + (idle ? 0 : 0);
+      const ph = side === 1 ? s : -s, limp = side === 1 ? 0.6 : 1.0;
+      r['hip' + side].rotation.x = ph * amp * limp + (side === 1 ? -0.05 * f : 0);
+      r['kn' + side].rotation.x = Math.max(0, -ph) * amp * 1.1 * limp + 0.06 * f;
+      r['hip' + side].rotation.z = side * 0.04 * f;
     }
-    // Bassin : monte et descend à chaque pas, se balance ; accroupi quand il se méfie
-    r.hips.position.y = 0.98 + Math.abs(Math.cos(c.phase)) * 0.045 * f * (run ? 1.8 : 1) - (sus ? 0.07 : 0) - (run ? 0.04 : 0);
-    r.hips.position.x = Math.sin(c.phase) * 0.025 * f + Math.sin(t * 0.4) * 0.03 * (idle ? 1 : 0);                       // à l'arrêt : il se déhanche, change d'appui
-    // Torse : se tord avec la marche, se penche en courant, respire
-    r.torso.rotation.y = -s * 0.15 * f + (c.shoutT > 0 ? 0.25 : 0); r.torso.rotation.x = (run ? 0.3 : sus ? 0.1 : 0) + Math.sin(t * 1.6) * 0.012; r.torso.scale.y = 1 + Math.sin(t * 1.6) * 0.012;
-    // Bras : en opposition aux jambes ; coudes pliés (très pliés en courant)
-    let armR = -r.hip1.rotation.x * 0.0 + (-1) * (-s) * amp * 0.9, armL = -s * amp * 0.9; armR = s * amp * 0.9;
-    r['sh1'].rotation.x = armR; r['sh-1'].rotation.x = -armR;
-    r['el1'].rotation.x = -(run ? 1.25 : 0.25 + 0.15 * f); r['el-1'].rotation.x = -(run ? 1.25 : 0.25 + 0.15 * f);
-    // Attitudes à l'arrêt : radio à l'épaule de temps en temps ; main près de l'étui quand il se méfie ; geste vers le joueur quand il crie
-    const radio = idle && c.state === 'idle' && ((t * 0.5 + c.seed) % 6) < 1.4;
-    if (radio) { r['sh1'].rotation.x = -2.1; r['el1'].rotation.x = -1.7; r.head.rotation.z = 0.12; } else r.head.rotation.z = 0;
-    if (sus && !run) { r['sh1'].rotation.x = -0.35; r['el1'].rotation.x = -0.5; r['sh-1'].rotation.x = -0.6; r['el-1'].rotation.x = -0.9; }
-    if (c.shoutT > 0) { r['sh1'].rotation.x = -1.55; r['el1'].rotation.x = -0.15; r.head.rotation.x = -0.15; } else r.head.rotation.x = run ? 0.05 : 0;
+    // Bassin : balance de côté, tombe lourdement sur la jambe valide, s'affaisse à l'arrêt
+    r.hips.position.y = 0.98 - Math.abs(Math.sin(c.phase)) * 0.05 * f - (sus ? 0.09 : 0) - (run ? 0.06 : 0);
+    r.hips.position.x = s * 0.05 * f + Math.sin(t * 0.37) * 0.035 * (idle ? 1 : 0);
+    r.hips.rotation.z = s * 0.07 * f + Math.sin(t * 0.37) * 0.03 * (idle ? 1 : 0);
+    // Torse : voûté en permanence (penché vers l'avant), tordu par la marche, respiration lourde
+    const lean = 0.28 + (run ? 0.3 : 0) + (sus ? 0.08 : 0);
+    r.torso.rotation.x = lean + Math.sin(t * 1.3) * 0.025 + tw * 0.06; r.torso.rotation.y = -s * 0.18 * f + tw * 0.12 * c.twDir; r.torso.rotation.z = -s * 0.06 * f;
+    r.torso.scale.y = 1 + Math.sin(t * 1.3) * 0.015;
+    // Bras : pendants, lourds, qui balancent en retard ; en poursuite ils se tendent devant lui comme pour t'attraper
+    const sw = s * amp * 0.55;
+    if (run) { r['sh1'].rotation.x = -0.85 + s2 * 0.12 + sw * 0.4; r['sh-1'].rotation.x = -0.7 - s2 * 0.12 - sw * 0.4; r['el1'].rotation.x = -0.35; r['el-1'].rotation.x = -0.5; r['sh1'].rotation.z = -0.1; r['sh-1'].rotation.z = 0.1; }
+    else if (sus) { r['sh1'].rotation.x = -0.25 + sw; r['sh-1'].rotation.x = -0.15 - sw; r['el1'].rotation.x = -0.5; r['el-1'].rotation.x = -0.35; r['sh1'].rotation.z = -0.08; r['sh-1'].rotation.z = 0.08; }
+    else { r['sh1'].rotation.x = 0.05 + sw + Math.sin(t * 0.8) * 0.03; r['sh-1'].rotation.x = 0.1 - sw; r['el1'].rotation.x = -0.12 - 0.1 * f; r['el-1'].rotation.x = -0.1 - 0.1 * f; r['sh1'].rotation.z = -0.05; r['sh-1'].rotation.z = 0.05; }
+    r['sh1'].rotation.z += jit * 0.08; r['sh-1'].rotation.z -= jit * 0.05;
+    if (c.shoutT > 0) { r['sh1'].rotation.x = -1.5; r['el1'].rotation.x = -0.1; }                 // il te désigne du bras
     if (G.arrest && run) { r['sh1'].rotation.x = -1.2; r['sh-1'].rotation.x = -1.2; r['el1'].rotation.x = -0.4; r['el-1'].rotation.x = -0.4; }
-    // Tête : balayage lent à l'arrêt, plus nerveux quand il se méfie, fixe en courant
-    r.head.rotation.y = run ? 0 : sus ? Math.sin(t * 2.2) * 0.9 : Math.sin(t * 0.6) * 0.55;
+    // Tête : lourde, en retard sur le corps, penchée ; balayage lent, saccadé quand il se méfie ; rejetée en arrière quand il crie
+    const ty = run ? Math.sin(t * 3) * 0.12 : sus ? Math.sin(t * 1.6) * 0.8 + Math.sign(Math.sin(t * 0.9)) * 0.25 : Math.sin(t * 0.45) * 0.5;
+    c.hy = (c.hy || 0) + (ty - (c.hy || 0)) * Math.min(1, dt * (sus ? 5 : 2));
+    r.head.rotation.y = c.hy + tw * 0.25 * c.twDir; r.head.rotation.z = (run ? 0.22 : 0.12) * Math.sin(t * 0.7 + 1) + 0.12 + jit * 0.1;
+    r.head.rotation.x = (c.shoutT > 0 ? -0.5 : 0.18 + (run ? 0.1 : 0)) + Math.sin(t * 1.1) * 0.03;
+    r.neck.rotation.x = 0.25;
     r.beam.material.opacity = 0.03 + Math.min(1, c.alert) * 0.05;
     c.g.position.set(c.x, c.y, c.z); c.g.rotation.y = c.facing;
     if (c.lamp) { const fx = Math.sin(c.facing + r.head.rotation.y), fz = Math.cos(c.facing + r.head.rotation.y); c.lamp.pos.set(c.x + fx * 0.9, c.y + 1.7, c.z + fz * 0.9); }   // la lampe frontale éclaire là où il regarde
@@ -1710,6 +1724,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
 
   function arrest(c) {
     if (G.arrest) return;
+    if (G.mode === 'lab') { G.say && G.say('(labo : arrestation ignorée)', 1200); c.alert = 0.5; c.state = 'search'; c.searchT = 3; return; }
     G.arrest = { t: 0 }; G.frozen = true; const P = G.P; P.vx = P.vz = 0;
     snd('fx', 'arrest', 1); G.say && G.say('ARRÊTÉ', 900);
     const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.25s'; f.style.opacity = 1; }
@@ -1731,7 +1746,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       }
     }
     let top = 0;
-    for (const c of cops) { think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
+    for (const c of cops) { if (!c.frozenLab) think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
     G.alert += (top - G.alert) * Math.min(1, dt * 3);
   };
 
@@ -2021,6 +2036,67 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     G.addCop(G.makeCop(), [-8, -14], 0, [[-8, -14], [8, -14]]);
     G.addCop(G.makeCop(), [55.5, -11.5], -Math.PI / 2 - 0.3, null);
     G.buildNavGrid(-16, 64, -30, -1, 1);
+    G.addFogSheets();
+  };
+
+
+
+  // NAPPES DE BRUME : quelques grands plans transparents près du sol, qui dérivent. Ils suivent le joueur mais la texture est
+  // calée sur le monde, donc on voit la brume « épaisse » sans réduire la distance de vue (la densité du brouillard ne change pas).
+  G.addFogSheets = function () {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), im = g.createImageData(128, 128);
+    const n = (x, y, k) => { let v = 0, a = 1, f = 4 * k, tot = 0; for (let o = 0; o < 4; o++) { const X = x * f, Y = y * f, ix = Math.floor(X), iy = Math.floor(Y), fx = X - ix, fy = Y - iy, h = (i, j) => { const q = Math.sin(((i % (4 * k * (1 << o))) * 127.1 + (j % (4 * k * (1 << o))) * 311.7 + o * 17) * 43758.5453); return q - Math.floor(q); };
+      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy); v += a * ((h(ix, iy) * (1 - sx) + h(ix + 1, iy) * sx) * (1 - sy) + (h(ix, iy + 1) * (1 - sx) + h(ix + 1, iy + 1) * sx) * sy); tot += a; a *= 0.5; f *= 2; } return v / tot; };
+    for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) { const v = Math.max(0, n(x / 128, y / 128, 1) - 0.38) * 2.4, i = (y * 128 + x) * 4; im.data[i] = 150; im.data[i + 1] = 165; im.data[i + 2] = 170; im.data[i + 3] = Math.min(255, v * 255); }
+    g.putImageData(im, 0, 0);
+    const tex = new T.CanvasTexture(cv); tex.wrapS = tex.wrapT = T.RepeatWrapping;
+    const sheets = [];
+    [[0.25, 0.20, 1], [0.7, 0.16, 0.8], [1.2, 0.13, 1.3], [1.8, 0.10, 0.9]].forEach(([y, op, sc], i) => {
+      const m = new T.Mesh(new T.PlaneGeometry(90, 90), new T.MeshBasicMaterial({ map: tex.clone(), transparent: true, opacity: op, depthWrite: false, fog: true }));
+      m.material.map.needsUpdate = true; m.material.map.wrapS = m.material.map.wrapT = T.RepeatWrapping; m.material.map.repeat.set(3 * sc, 3 * sc);
+      m.rotation.x = -Math.PI / 2; m.renderOrder = 2; G.scene.add(m); sheets.push({ m, y, sc, i });
+    });
+    G.animated.push({ update(dt) {
+      const P = G.P, t = performance.now() / 1000; if (!P) return;
+      for (const s of sheets) {
+        const baseY = (P.pos.y > 5 ? 9 : 0);
+        s.m.position.set(P.pos.x, baseY + s.y, P.pos.z);
+        const rep = 3 * s.sc, k = rep / 90, dr = (s.i % 2 ? 1 : -1) * t * 0.012;
+        s.m.material.map.offset.set(P.pos.x * k + dr, -P.pos.z * k + t * 0.007 * (s.i + 1));
+      }
+    } });
+  };
+
+  /* ---------------------------------------------------------------
+     LABO POLICIER : un grand sol plat dans la brume, un policier, des raccourcis clavier. Sert à régler le corps,
+     la démarche et la vitesse SANS jouer le niveau. (Aucune arrestation.)
+     --------------------------------------------------------------- */
+  G.buildLab = function () {
+    G.isPlayable = null; G.have = []; G.objective = '';
+    G.B(-40, 40, -1, 0, -40, 40, M().asphalt, { tile: 3, grime: false });
+    crate(-4, -4, 1.0, 0.9); crate(4, -9, 1.0, 0.9); lowWall(-2, 2, -14, -13.4); fireBarrel(8, -3);
+    lamp(0, 3.6, -20, { I: 0.9, dist: 14 });
+    const c = G.addCop(G.makeCop(), [0, -12], 0, [[-8, -12], [8, -12]]);
+    G.buildNavGrid(-30, 30, -30, 30, 1);
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:12px;top:12px;z-index:5;font:12px/1.5 monospace;color:#9aa;background:rgba(0,0,0,.55);padding:8px 10px;pointer-events:none;white-space:pre';
+    document.body.appendChild(box);
+    const sp = G.COP_SPEED, base = Object.assign({}, sp); let mult = 1, paused = false, n = 1;
+    G.animated.push({ update() { box.textContent = 'LABO POLICIER\n1 calme  2 méfiant  3 poursuite  4 fouille  5 crie\n6/7 vitesse -/+ (x' + mult.toFixed(2) + ')  8 +1 flic  9 -1 flic  0 pause\nétat: ' + (G.cops[0] ? G.cops[0].state : '-') + '  flics: ' + G.cops.length; } });
+    addEventListener('keydown', e => {
+      const k = e.code.replace('Digit', '').replace('Numpad', ''), P = G.P, cs = G.cops;
+      if (k === '6' || k === '7') { mult = G.clamp(mult * (k === '7' ? 1.25 : 0.8), 0.25, 3); for (const q in base) sp[q] = base[q] * mult; }
+      else if (k === '0') { paused = !paused; for (const q of cs) q.frozenLab = paused; }
+      else if (k === '8') { const q = G.addCop(G.makeCop(), [(Math.random() - 0.5) * 16, -14 - Math.random() * 6], 0, null); q.state = 'idle'; n++; }
+      else if (k === '9' && cs.length > 1) { const q = cs.pop(); G.scene.remove(q.g); if (q.lamp) q.lamp.I = 0; }
+      else if (/^[1-5]$/.test(k)) for (const q of cs) {
+        q.last = [P.pos.x, P.pos.z]; q.path = []; q.pathT = 0;
+        if (k === '1') { q.state = 'idle'; q.alert = 0; } else if (k === '2') { q.state = 'suspicious'; q.alert = 0.6; } else if (k === '3') { q.state = 'chase'; q.alert = 1; q.lostT = 0; }
+        else if (k === '4') { q.state = 'search'; q.alert = 0.8; q.searchT = 10; } else if (k === '5') { q.shoutT = 1.6; }
+      }
+    });
+    const P = G.P; if (P) { P.pos.set(0, 0, 4); P.safe.set(0, 0, 4); P.yaw = 0; }
+    G.labStart = [0, 0, 4]; G.addFogSheets();
   };
 
   /* ---------------------------------------------------------------
@@ -2472,8 +2548,9 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     progress(0.05, 'Rendu'); G.initRender(canvas); await tick();
     progress(0.2, 'Matières : béton, rouille, asphalte'); G.buildMaterials(); await tick();
     if (G.mode === 'sandbox') { progress(0.5, 'Grande carte (ancienne)'); G.buildWorld(); await tick(); progress(0.85, 'Police'); G.initCops(); }
+    else if (G.mode === 'lab') { progress(0.5, 'Labo policier'); G.buildBase(); G.buildLab(); await tick(); }
     else { progress(0.5, 'Niveau 1 : chez nous'); G.buildBase(); G.buildTower(); G.buildLevel1(); await tick(); }
-    progress(0.9, 'Joueur'); G.initPlayer(); G.updateLamps(0, 0); G.render(0);
+    progress(0.9, 'Joueur'); G.initPlayer(); if (G.mode === 'lab') { G.P.pos.set(0, 0, 4); G.P.safe.set(0, 0, 4); G.P.eye = 1.62; } G.updateLamps(0, 0); G.render(0);
     progress(1, 'Prêt');
     last = performance.now(); requestAnimationFrame(loop);
     bindInput();
@@ -2617,6 +2694,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   }
   $('b-play').addEventListener('click', () => launch('level'));
   $('b-sandbox').addEventListener('click', () => launch('sandbox'));
+  $('b-lab').addEventListener('click', () => launch('lab'));
   $('enter').addEventListener('click', () => { $('enter').hidden = true; G.start(); });
 })();
 </script>
