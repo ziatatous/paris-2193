@@ -3,7 +3,7 @@
 > Ce fichier est la mémoire du projet. Le relire à chaque session, le mettre à jour à chaque décision.
 
 ## CONTEXTE
-Jeu vidéo 3D en première personne avec **Godot 4 (GDScript)**. Pas d'artiste, peu de temps : tout passe par du **code, des primitives et des assets gratuits**. L'utilisateur est étudiant en informatique (ASIR), **débutant en dev de jeux** : expliquer simplement ce qui est fait, étape par étape. Langue de travail : français.
+Jeu vidéo 3D en première personne, **dans le navigateur : JavaScript + Three.js r128 + Web Audio** (le prototype Godot initial est archivé dans `godot-archive/`). Pas d'artiste, peu de temps : tout passe par du **code, des primitives et des assets gratuits**. L'utilisateur est étudiant en informatique (ASIR), **débutant en dev de jeux** : expliquer simplement ce qui est fait, étape par étape. Langue de travail : français.
 
 ## VISION
 Horreur / cyberpunk sombre, an 2193, Paris. Monde sale et rafistolé, peu d'évolution malgré la cybernétique. Plus de pétrole, seul le biodiesel tient (voitures défoncées, mécanique). Les oiseaux ne se mangent plus. Régime autoritaire, net rempli d'IA sombres. Ambiance Russie / Europe sombre et crade, ruelles, urbex, armes anciennes et cinétiques, vieux hacking.
@@ -47,6 +47,15 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Commit git à chaque étape qui marche.
 - Choix important (architecture, outil) : proposer 2 options et en recommander une.
 
+## STRUCTURE DU CODE (v3) — à lire en premier
+- `index.html` : **menu** (JOUER / OPTIONS : qualité, sensibilité, volume) + chargeur. Le jeu ne se charge qu'après « JOUER ». Pas de modules ES (double-clic possible).
+- `js/core.js` (G, réglages, aléatoire, bruit) · `js/render.js` (rendu basse résolution + filtre : flou, halo, grain, balayage, vignette) · `js/textures.js` (béton coffré, peinture, asphalte, métal, neige CRT) · `js/world.js` (appartement y=9, escalier 3 étages, hall, rue brutaliste, lampes, corps) · `js/player.js` (marche 2,5 m/s, course 6,4 m/s, caméra qui balance, collisions, marches) · `js/audio.js` (tout généré, change selon intérieur/extérieur) · `js/game.js` (boot, boucle, entrées, interaction E, intro).
+- Un seul objet global `G` ; chaque fichier y ajoute ses fonctions et ne fait rien avant `G.boot()`.
+- **`python3 build.py`** -> `dist/paris2193.html` (tout en un) et `dist/paris2193.artifact.html` (sans `<!doctype>`, pour la publication Artifact). Publier l'Artifact depuis ce dernier fichier.
+- Éclairage : **3 vraies lumières seulement**, déplacées sur les 3 lampes les plus proches ; les autres lampes sont émissives (ampoule + halo). Saleté « cuite » dans les couleurs de sommets (sombre au sol). Pas de bump map.
+- Tests locaux : Playwright + `three.min.js` r128 (npm) redirigé à la place du CDN ; un pilote automatique appelle `G.updatePlayer(dt)` pour valider l'escalier et les sauts.
+- Lieux/coordonnées : départ (0.1, 9, 0.9) face à la fenêtre (-z). Palier d'étage z 3.3–4.7 ; volée est x 0.1–1.8 (descend vers +z), volée ouest x -1.8–-0.1 (retour vers -z). Sortie hall : porte x -1.6–-0.4 à z=-2.65. Rue vers -z, passerelle ouest à 3,2 m avec trou de 3 m (z -34 à -37, il faut COURIR), blocs à escalader côté est (1/2/3 m), corps vers (-3.2, 0, -21.5).
+
 ## DÉCISIONS PRISES
 - **[CHANGEMENT MAJEUR] Passage de Godot à JavaScript dans le navigateur** : Three.js (r128, cdnjs) + Web Audio, un seul fichier `index.html`. Raison : Godot trop lourd à installer/lancer pour l'utilisateur ; le navigateur donne un résultat direct (lien cliquable), sons et musique générés par code sans fichiers. Claude peut aussi tester avec Chromium/Playwright (captures d'écran). Le code Godot (étapes 1-2) est archivé dans `godot-archive/`. Les décisions « Godot » ci-dessous sont historiques.
 - Le jeu est publié comme Artifact claude.ai (lien jouable) et versionné ici. Pour la republication : retirer la ligne `<!doctype html>` du fichier avant de publier (l'Artifact ajoute son propre squelette).
@@ -74,7 +83,12 @@ Verdict sur la v2 : « trop lego, plastique, net ». Objectifs :
 - À retirer pour l'instant : affiches, pneus, pluie, **scène de peur** (jugée ratée). À garder : **tonneaux**. Ne pas supprimer le corps dans la ruelle sans en reparler.
 - Insight : le brutalisme EST fait de grosses boîtes ; le côté « lego » venait des couleurs, de la netteté et de la texture uniforme, pas des boîtes.
 
-## ÉTAPES
+## STATUT v3 (fait)
+Menu + code multi-fichiers ; rendu brouillard/CRT ; béton brut gris ; appartement (lit, bureau, écran CRT, briquet Bic gris à ramasser avec E) ; escalier sans ascenseur ; hall ; rue brutaliste fluide avec parkour ; son par zone ; début calme (titre puis fondu). Retirés : pluie, affiches, pneus, scène de peur (corps conservé, sans déclencheur).
+## À FAIRE ENSUITE (ordre proposé)
+1. Retours de l'utilisateur sur l'ambiance/perf. 2. **Mains/avant-bras et jambes visibles** (corps réaliste sombre/sale, peau en texture peinte par couches pour chrome/tatouages plus tard). 3. Détails du studio (pod de hacking, écran). 4. Premier ennemi / fuite (backlog 1). 5. Scène de peur refaite plus subtile, plus tard.
+
+## ÉTAPES (historique, version Godot puis web)
 (Version web : prototype complet livré d'un coup — ruelle, brouillard, néons qui grésillent, corps, son 3D, musique générative, scène de peur. À valider par l'utilisateur.)
 - [x] Étape 1 — Projet + joueur FPS dans une salle de test.
 - [x] Étape 2 — Ruelle (primitives, textures procédurales nearest, rendu basse résolution PS1). (étape 1 validée par l'utilisateur)
