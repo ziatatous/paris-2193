@@ -52,9 +52,13 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Structure : `scenes/` (.tscn), `scripts/` (.gd). Scènes construites au maximum **par code** (peu de fichiers .tscn à écrire à la main, moins d'erreurs sans éditeur).
 - Contrôles : ZQSD (AZERTY, via touches physiques) + souris, Shift sprint, Espace saut, Échap libère la souris.
 
+- Rendu PS1 : fenêtre 1280x720, rendu interne 640x360 (`stretch/mode=viewport`). Souris via `screen_relative` (sensibilité indépendante de la résolution).
+- Textures 100 % procédurales (`scripts/textures.gd`), 64x64, filtrage nearest, projection triplanar monde (pas d'UV à gérer).
+- Ruelle : `scripts/alley.gd` (boîtes/cylindres), z=+20 départ -> z=-20 fond, 4 m de large. Zone libre côté gauche vers z=-10 réservée au corps.
+
 ## ÉTAPES
 - [x] Étape 1 — Projet + joueur FPS dans une salle de test.
-- [ ] Étape 2 — Ruelle (primitives, textures procédurales nearest, rendu basse résolution PS1).
+- [x] Étape 2 — Ruelle (primitives, textures procédurales nearest, rendu basse résolution PS1). (étape 1 validée par l'utilisateur)
 - [ ] Étape 3 — Brouillard, lumière faible, néons qui grésillent.
 - [ ] Étape 4 — Le corps au sol.
 - [ ] Étape 5 — Sons d'ambiance (générés par code) + pas.

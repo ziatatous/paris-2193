@@ -37,8 +37,8 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# Mouvement de souris -> rotation de la vue.
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotate_y(-event.relative.x * MOUSE_SENSITIVITY)           # gauche/droite : tout le corps
-		head.rotate_x(-event.relative.y * MOUSE_SENSITIVITY)      # haut/bas : seulement la tête
+		rotate_y(-event.screen_relative.x * MOUSE_SENSITIVITY)           # gauche/droite : tout le corps
+		head.rotate_x(-event.screen_relative.y * MOUSE_SENSITIVITY)      # haut/bas : seulement la tête
 		head.rotation.x = clamp(head.rotation.x, deg_to_rad(-89), deg_to_rad(89))
 
 	# Échap : libère la souris. Clic : la reprend.
