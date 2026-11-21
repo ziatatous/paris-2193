@@ -16,19 +16,29 @@
   #caption { bottom: 14%; font-size: .95rem; color: var(--fg); }
   #hint { bottom: 6%; font-size: .78rem; letter-spacing: .1em; color: var(--dim); }
   /* --- Menu --- */
-  #menu, #enter { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; text-align: center;
-    background: radial-gradient(ellipse at 50% 60%, #1c2325 0%, #0b0e0f 62%, #050606 100%);
+  #menu, #enter { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; justify-content: center; gap: 1rem; background: #050606;
     padding: 1rem max(16px, env(safe-area-inset-left, 0px)); }
+  #menu { align-items: flex-start; text-align: left; padding-left: clamp(24px, 9vw, 150px); overflow: hidden; }
+  #enter { align-items: center; text-align: center; background: radial-gradient(ellipse at 50% 60%, #1a2022 0%, #0a0d0e 62%, #050606 100%); }
+  /* Image de fond : l'escalier. Les bords sont fondus dans le noir (masque), elle respire lentement, la lumière vacille. */
+  #bg { position: absolute; top: -7%; height: 114%; aspect-ratio: 860 / 1290; right: 7vw; background: url(assets/menu/stairs.webp) center / cover no-repeat;
+    filter: saturate(.5) brightness(.85) contrast(1.05);
+    -webkit-mask-image: radial-gradient(ellipse closest-side, #000 38%, transparent 100%); mask-image: radial-gradient(ellipse closest-side, #000 38%, transparent 100%);
+    animation: breathe 26s ease-in-out infinite alternate, lampflick 11s infinite; }
+  #bgfog { position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(90deg, #050606 0%, rgba(5,6,6,.55) 34%, rgba(5,6,6,0) 58%), radial-gradient(ellipse at 72% 108%, rgba(46,56,58,.4), transparent 62%); }
+  @keyframes breathe { from { transform: scale(1) } to { transform: scale(1.045) } }
+  @keyframes lampflick { 0%, 90%, 100% { opacity: 1 } 91% { opacity: .55 } 92% { opacity: .95 } 93.5% { opacity: .4 } 95% { opacity: 1 } }
   #menu[hidden], #enter[hidden], .panel[hidden] { display: none; }
-  #grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .06; image-rendering: pixelated; pointer-events: none; }
-  h1 { margin: 0 0 .4rem; font-weight: 400; letter-spacing: .45em; font-size: clamp(2rem, 8vw, 4.4rem); color: var(--hot); text-indent: .45em;
+  #grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .05; pointer-events: none; }
+  h1 { margin: 0 0 .4rem; font-weight: 400; letter-spacing: .45em; font-size: clamp(2rem, 7vw, 4.2rem); color: var(--hot);
     animation: flick 7s infinite; }
   @keyframes flick { 0%, 92%, 100% { opacity: 1 } 93% { opacity: .35 } 94% { opacity: .9 } 95% { opacity: .2 } 96% { opacity: 1 } }
   .sub { color: var(--dim); font-size: .8rem; letter-spacing: .3em; margin: 0 0 1.4rem; }
-  .panel { position: relative; display: flex; flex-direction: column; align-items: center; gap: .9rem; min-width: min(22rem, 100%); }
+  .panel { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: .9rem; min-width: min(22rem, 100%); }
   button { font: inherit; background: none; color: var(--fg); border: 1px solid var(--line); padding: .65rem 2.2rem; letter-spacing: .3em; font-size: .85rem; cursor: pointer; min-width: 14rem; }
   button:hover, button:focus-visible { color: #000; background: var(--hot); border-color: var(--hot); outline: none; }
-  .row { display: flex; align-items: center; justify-content: center; gap: .6rem; flex-wrap: wrap; font-size: .8rem; letter-spacing: .12em; }
+  .row { display: flex; align-items: center; justify-content: flex-start; gap: .6rem; flex-wrap: wrap; font-size: .8rem; letter-spacing: .12em; }
   .row label { min-width: 8.5rem; text-align: right; color: var(--dim); }
   .row button { min-width: 0; padding: .35rem .8rem; letter-spacing: .1em; }
   .row button.on { color: #000; background: var(--hot); border-color: var(--hot); }
@@ -40,7 +50,13 @@
   #enter-sub { color: var(--dim); font-size: .8rem; letter-spacing: .25em; animation: blink 2.4s infinite; }
   @keyframes blink { 50% { opacity: .25 } }
   #ver { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); bottom: 12px; color: var(--dim); font-size: .7rem; letter-spacing: .15em; }
-  @media (prefers-reduced-motion: reduce) { h1, #enter-sub { animation: none; } }
+  @media (max-width: 760px) {
+    #menu { align-items: center; text-align: center; padding-left: 16px; }
+    .panel { align-items: center; } .row { justify-content: center; }
+    #bg { right: auto; left: calc(50% - 38vh); opacity: .55; }
+    #bgfog { background: rgba(5,6,6,.35); }
+  }
+  @media (prefers-reduced-motion: reduce) { h1, #enter-sub, #bg { animation: none; } }
 </style>
 
 <canvas id="game"></canvas>
@@ -49,10 +65,11 @@
 <div id="prompt"></div><div id="caption"></div><div id="hint">Z Q S D  marcher &nbsp;·&nbsp; Maj  courir &nbsp;·&nbsp; Espace  sauter &nbsp;·&nbsp; E  interagir &nbsp;·&nbsp; M  musique</div>
 
 <div id="menu">
+  <div id="bg"></div><div id="bgfog"></div>
   <canvas id="grain" width="160" height="90"></canvas>
   <div class="panel" id="p-main">
     <h1>PARIS 2193</h1>
-    <p class="sub">PROTOTYPE &nbsp;·&nbsp; LE STUDIO, L'ESCALIER, LA RUE</p>
+    <p class="sub">PROTOTYPE &nbsp;·&nbsp; v3</p>
     <button id="b-play">JOUER</button>
     <button id="b-opt">OPTIONS</button>
   </div>
@@ -61,7 +78,9 @@
     <div class="row"><label>Qualité</label>
       <button data-q="low">BAS</button><button data-q="medium">MOYEN</button><button data-q="high">HAUT</button></div>
     <div class="row"><label>Sensibilité</label><input type="range" id="o-sens" min="0.4" max="2" step="0.05"></div>
-    <div class="row"><label>Volume</label><input type="range" id="o-vol" min="0" max="1" step="0.05"></div>
+    <div class="row"><label>Volume général</label><input type="range" id="o-vol" min="0" max="1" step="0.05"></div>
+    <div class="row"><label>Musique</label><input type="range" id="o-music" min="0" max="1" step="0.05"></div>
+    <div class="row"><label>Effets</label><input type="range" id="o-fx" min="0" max="1" step="0.05"></div>
     <p class="sub" style="margin:0;font-size:.7rem">Bas = plus fluide, image plus floue.</p>
     <button id="b-back">RETOUR</button>
   </div>
@@ -88,7 +107,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const FILES = ['core', 'render', 'textures', 'world', 'player', 'audio', 'game'];
-  const S = { quality: 'medium', sens: 1, volume: 0.9 };
+  const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9 };
   try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };
   const show = id => { for (const p of ['p-main', 'p-opt', 'p-load']) $(p).hidden = p !== id; };
@@ -100,11 +119,13 @@
   // --- Options ---
   function refreshOpt() {
     document.querySelectorAll('[data-q]').forEach(b => b.classList.toggle('on', b.dataset.q === S.quality));
-    $('o-sens').value = S.sens; $('o-vol').value = S.volume;
+    $('o-sens').value = S.sens; $('o-vol').value = S.volume; $('o-music').value = S.music; $('o-fx').value = S.fx;
   }
   document.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { S.quality = b.dataset.q; save(); refreshOpt(); }));
   $('o-sens').addEventListener('input', e => { S.sens = +e.target.value; save(); });
   $('o-vol').addEventListener('input', e => { S.volume = +e.target.value; save(); });
+  $('o-music').addEventListener('input', e => { S.music = +e.target.value; save(); });
+  $('o-fx').addEventListener('input', e => { S.fx = +e.target.value; save(); });
   $('b-opt').addEventListener('click', () => { refreshOpt(); show('p-opt'); });
   $('b-back').addEventListener('click', () => show('p-main'));
 

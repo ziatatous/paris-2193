@@ -9,7 +9,7 @@
   G.T = window.THREE;
 
   // --- Réglages du joueur (sauvegardés dans le navigateur si possible) ---
-  G.settings = { quality: 'medium', sens: 1, volume: 0.9 };
+  G.settings = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9 };
   G.loadSettings = function () {
     try { Object.assign(G.settings, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   };

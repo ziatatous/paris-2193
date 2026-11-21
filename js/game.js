@@ -31,7 +31,7 @@
 
   // Appelé quand le joueur clique pour entrer (ou reprendre après une pause)
   G.start = function () {
-    G.audio.init(); G.audio.resume(); G.audio.setVolume(G.settings.volume);
+    G.audio.init(); G.audio.resume();
     playing = true; last = performance.now();
     try { const r = canvasEl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* tant pis : clic maintenu pour tourner */ }
     if (!started) { started = true; intro(); }
@@ -94,7 +94,7 @@
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
     const zone = G.zoneAt(G.P.pos);
-    G.scene.fog.density += ((zone === 'in' ? 0.032 : 0.06) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
+    G.scene.fog.density += ((zone === 'in' ? 0.04 : 0.09) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
     if (playing) { G.camera.getWorldDirection(fwd); G.audio.update(dt, G.camera.position, fwd, zone, G.P.exert); }
     G.render(time);
   }

@@ -2,7 +2,8 @@
    render.js : le rendu "vieil écran + brouillard".
    1) La scène est dessinée dans une petite image (ex. 324 pixels de haut).
    2) Un filtre plein écran l'agrandit en l'adoucissant, puis ajoute :
-      flou léger, halo sur les lumières, couleurs ternes, grain, lignes de balayage, bords sombres.
+      flou léger, halo sur les lumières, couleurs ternes, gros grain, bords sombres.
+      (Pas de lignes de balayage ni de décalage de couleurs : ça fatiguait les yeux.)
    Moins de pixels à calculer = jeu fluide ; et le flou cache les limites du navigateur.
    ===================================================================== */
 (function () {
@@ -16,9 +17,8 @@
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){
-      vec2 c = vUv - 0.5; float r2 = dot(c, c);
-      vec2 off = c * r2 * 0.02;                                  // décalage des couleurs sur les bords (vieille optique)
-      vec3 col = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
+      vec2 c = vUv - 0.5;
+      vec3 col = texture2D(tDiffuse, vUv).rgb;
       vec2 t = texel * 1.6;                                      // flou : moyenne avec les voisins
       vec3 blur = (texture2D(tDiffuse, vUv + vec2(t.x, 0.)).rgb + texture2D(tDiffuse, vUv - vec2(t.x, 0.)).rgb
                  + texture2D(tDiffuse, vUv + vec2(0., t.y)).rgb + texture2D(tDiffuse, vUv - vec2(0., t.y)).rgb) * 0.25;
@@ -30,9 +30,8 @@
       float l = dot(col, vec3(0.299, 0.587, 0.114));            // couleurs ternes, teinte froide un peu verdâtre
       col = mix(vec3(l), col, 0.62) * vec3(0.93, 1.0, 0.95);
       col = pow(max(col, 0.0), vec3(1.0)) + 0.016;
-      col *= 0.955 + 0.045 * sin(vUv.y * lines * 6.2832);        // lignes de balayage
-      col += (hash(gl_FragCoord.xy + fract(time) * 71.0) - 0.5) * 0.085;   // grain
-      col *= smoothstep(0.98, 0.22, length(c) * 1.35);           // bords sombres
+      col += (hash(gl_FragCoord.xy + fract(time) * 71.0) - 0.5) * 0.13;   // grain (plus marqué)
+      col *= smoothstep(1.15, 0.3, length(c) * 1.3);            // bords sombres, doux
       col += flash;
       gl_FragColor = vec4(col, 1.0);
     }`;

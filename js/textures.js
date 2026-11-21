@@ -41,9 +41,9 @@
     const f = G.fbm(S), cr = G.crackSet(S, 7, 70);
     return (x, y) => {
       let m = (0.55 + f(x, y) * 0.7) * (0.85 + G.rnd() * 0.3);
-      if (G.rnd() < 0.03) m *= 1.8;
+      if (G.rnd() < 0.012) m *= 1.25;
       if (cr.has(y * S + x)) m *= 0.4;
-      return [50 * m, 52 * m, 54 * m];
+      return [40 * m, 42 * m, 44 * m];
     };
   }
   // Métal rouillé gris (tonneaux, rambardes)
@@ -102,7 +102,7 @@
       concreteDark: mk(concreteFn(128, [0.8, 0.82, 0.82], 0.8)),
       wall: mk(paintFn(128)),                                                   // murs intérieurs de l'appartement
       floor: mk(floorFn(128)),
-      asphalt: mk(asphaltFn(128), { shininess: 38, specular: 0x3a444c }),      // mouillé : accroche un peu la lumière
+      asphalt: mk(asphaltFn(128), { shininess: 8, specular: 0x101417 }),       // humide mais mat
       metal: mk(metalFn(128), { shininess: 12, specular: 0x222222 }),
       dark: new T.MeshPhongMaterial({ color: 0x08090a, shininess: 2 }),
       iron: new T.MeshPhongMaterial({ color: 0x15171a, shininess: 20, specular: 0x333333 }),

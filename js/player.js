@@ -43,7 +43,7 @@
 
     // 2) Saut
     let jumped = false;
-    if (k.Space && P.onGround) { P.vy = JUMP; P.onGround = false; jumped = true; }
+    if (k.Space && P.onGround) { P.vy = JUMP; P.onGround = false; jumped = true; G.audio.jump(); }
 
     // 3) Déplacement axe par axe (on glisse le long des murs) ; petites marches franchies automatiquement
     for (const axis of ['x', 'z']) {

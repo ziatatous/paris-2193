@@ -3,12 +3,17 @@
 Le code source reste séparé dans js/ pour la lisibilité ; ce script ne fait que les coller dans index.html.
 Usage :  python3 build.py
 """
-import os
+import base64, os, re
+from manifest import make_manifest
 FILES = ['core', 'render', 'textures', 'world', 'player', 'audio', 'game']   # même ordre que dans index.html
 html = open('index.html', encoding='utf-8').read()
 bundle = ''.join('<script>\n/* ---- js/%s.js ---- */\n%s\n</script>\n' % (f, open('js/%s.js' % f, encoding='utf-8').read()) for f in FILES)
 assert '<!--BUNDLE-->' in html
 out = html.replace('<!--BUNDLE-->', bundle)
+# L'image du menu est intégrée au fichier (data URI) pour que la version tout-en-un soit autonome
+img = base64.b64encode(open('assets/menu/stairs.webp', 'rb').read()).decode()
+out = out.replace('url(assets/menu/stairs.webp)', 'url(data:image/webp;base64,%s)' % img)
+make_manifest()   # met aussi à jour audio/manifest.json
 os.makedirs('dist', exist_ok=True)
 open('dist/paris2193.html', 'w', encoding='utf-8').write(out)
 # Variante pour l'Artifact claude.ai : sans la ligne <!doctype html> (la plateforme ajoute son propre squelette)

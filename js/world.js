@@ -87,6 +87,7 @@
   G.updateLamps = function (dt, time) {
     const cam = G.camera.position;
     for (const L of G.lamps) {
+      L.d2 = L.pos.distanceToSquared(cam);
       if (L.flicker > 0) {                                   // panne par à-coups
         if (L.burst > 0) {
           L.burst -= dt; L.blink -= dt;
@@ -96,8 +97,7 @@
         L.level = L.cur * (0.94 + 0.06 * Math.sin(time * 50 + L.phase));
       }
       if (L.bulb) L.bulb.material.color.copy(L.color).multiplyScalar(0.25 + 0.75 * L.level);
-      if (L.halo) L.halo.material.opacity = 0.5 * L.level;
-      L.d2 = L.pos.distanceToSquared(cam);
+      if (L.halo) L.halo.material.opacity = 0.5 * L.level * (L.base > 2 ? G.smooth(G.clamp((Math.sqrt(L.d2) - 2) / 7, 0, 1)) : 1);   // grands halos : on ne s'aveugle pas dessous
     }
     const near = G.lamps.slice().sort((a, b) => a.d2 - b.d2);
     for (let i = 0; i < G.pool.length; i++) {
@@ -231,7 +231,7 @@
       const pole = new T.Mesh(new T.CylinderGeometry(0.05, 0.07, 5.5, 8), M.iron); pole.position.set(x, 2.75, z); G.scene.add(pole);
       const arm = new T.Mesh(new T.BoxGeometry(Math.abs(x) * 0.0 + 0.9, 0.06, 0.06), M.iron); arm.position.set(x - Math.sign(x) * 0.45, 5.5, z); G.scene.add(arm);
       G.colliders.push({ minX: x - 0.08, maxX: x + 0.08, minY: 0, maxY: 5.5, minZ: z - 0.08, maxZ: z + 0.08 });
-      G.addLamp({ x: x - Math.sign(x) * 0.9, y: 5.4, z, color: 0xffa44a, I: 1.3, dist: 17, halo: 5.5, flicker: i === 3 ? 0.6 : 0, fogHalo: true });
+      G.addLamp({ x: x - Math.sign(x) * 0.9, y: 5.4, z, color: 0xffa44a, I: 0.95, dist: 14, halo: 5.5, flicker: i === 3 ? 0.6 : 0, fogHalo: true });
     });
   }
 
@@ -278,8 +278,8 @@
      --------------------------------------------------------------- */
   G.buildWorld = function () {
     glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']]);
-    G.scene.background = new T.Color(0x1b2125);
-    G.scene.fog = new T.FogExp2(0x1b2125, 0.06);
+    G.scene.background = new T.Color(0x161b1e);
+    G.scene.fog = new T.FogExp2(0x161b1e, 0.09);
     G.scene.add(new T.HemisphereLight(0x4d5a63, 0x1a1e20, 0.85));         // ciel gris-bleu en haut, sol sombre en bas
     G.pool = [0, 1, 2].map(() => { const l = new T.PointLight(0xffffff, 0, 10, 2); G.scene.add(l); return l; });
     buildTower(); buildStreet(); buildBody();
