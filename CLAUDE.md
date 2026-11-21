@@ -48,7 +48,7 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Choix important (architecture, outil) : proposer 2 options et en recommander une.
 
 ## DÉCISIONS PRISES
-- Godot 4.x, GDScript. Renderer **Forward+/Mobile non imposé** : on vise `gl_compatibility` pour la compatibilité large (PC modestes) — à revoir si besoin.
+- **Godot 4.7.2 stable** (version de l'utilisateur, à viser pour toute API), GDScript. Renderer **Forward+/Mobile non imposé** : on vise `gl_compatibility` pour la compatibilité large (PC modestes) — à revoir si besoin.
 - Structure : `scenes/` (.tscn), `scripts/` (.gd). Scènes construites au maximum **par code** (peu de fichiers .tscn à écrire à la main, moins d'erreurs sans éditeur).
 - Contrôles : ZQSD (AZERTY, via touches physiques) + souris, Shift sprint, Espace saut, Échap libère la souris.
 
