@@ -154,3 +154,9 @@ Carte v2 implémentée + dressing Outlast + police (voir plus haut). Avant : car
 - **LABO POLICIER** (bouton du menu, `G.mode='lab'`, `G.buildLab` dans levels.js) : sol plat, un flic, touches 1-5 états, 6/7 vitesse, 8/9 +/- flics, 0 pause ; pas d'arrestation.
 - **Brume** : même distance de vue, mais nappes (`G.addFogSheets`, 4 plans qui dérivent près du sol). Densité inchangée.
 - **Carte à refaire (à valider en ASCII avant)** : sensation claustro permanente (pas forcément de gros immeubles : éléments qui rétrécissent le passage), couloirs 2-3 m, tracé qui tourne/se replie, culs-de-sac, pas de lignes droites, cour plus petite et encombrée, plein de détails légers (instanciés). **Graffitis : plus tard** (l'utilisateur fournira des modèles visuels).
+
+## RETOURS v9 (utilisateur) et décisions
+- **Arrestation en 3 temps, tout en 1re personne** : bousculé -> tombe -> à terre il est sur toi : ESPACE répété = te débattre (échappatoire, plus dur à 2 flics) ; sinon menottes dans le dos, noir, retour au début. Prise à ~1,1 m (cops.js `arrest/updateArrest/endArrest`).
+- **Flic** : formes plus lisses + flou de mouvement sur les membres (à faire), animations plus fluides.
+- **Escalier** : style New York, 4 étages, 2 portes de voisins par palier, garde-corps carrés, paliers distincts, lumière différente par étage.
+- **Appartement = chambre de Neo (Matrix)** : photos de référence fournies (3 images : plan large, vue du dessus, vue d'angle). Éléments : pièce unique sombre teintée VERT sulfureux, murs sales d'un vert-gris, un petit lit défait sous une fenêtre à barreaux avec oreillers, **bureau d'ordinateur en L** couvert d'un fouillis (vieux moniteurs CRT beige, claviers, imprimante, téléphone, tasses, CD, papiers, câbles partout par terre et pendant du plafond), étagère de livres, four à micro-ondes/placard vert à droite, chaise de bureau, une lampe d'architecte rouge, écran qui éclaire en vert. Sol en parquet foncé.

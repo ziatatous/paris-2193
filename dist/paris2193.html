@@ -1641,6 +1641,8 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   function face(c, tx, tz, dt, rate) { const target = Math.atan2(tx - c.x, tz - c.z); let da = target - c.facing; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283; c.facing += da * Math.min(1, dt * (rate || 4)); c.speed += (0 - c.speed) * Math.min(1, dt * 6); }
 
   function think(c, dt) {
+    if (G.arrest) { if (G.arrest.cop !== c) c.speed *= 0.9; return; }
+    if (c.staggerT > 0) { c.staggerT -= dt; c.speed *= 0.85; return; }
     const pc = perceive(c, dt);
     if (G.hidden && c.state !== 'idle') {                                   // le joueur est caché : le policier vient voir
       const h = G.hidden, d = Math.hypot(h.x - c.x, h.z - c.z);
@@ -1669,7 +1671,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
         const P = G.P; if (pc.sees) c.lostT = 0; else c.lostT += dt;
         const tx = pc.sees ? P.pos.x : (c.last ? c.last[0] : P.pos.x), tz = pc.sees ? P.pos.z : (c.last ? c.last[1] : P.pos.z);
         const d = steer(c, tx, tz, SPEED.chase * (G.P.stunT > 0 ? 1 : 1), dt);
-        if (pc.dist < 1.3 && Math.abs(P.pos.y - c.y) < 1.7 && pc.sees) arrest(c);
+        if (pc.dist < 1.1 && Math.abs(P.pos.y - c.y) < 1.7 && pc.sees) arrest(c);
         if (c.lostT > 20 || (d < 2.5 && !pc.sees)) { c.state = 'search'; c.searchT = 6; }                  // il court jusqu'à l'endroit où il t'a vu, puis il fouille
         break; }
       case 'search':
@@ -1711,7 +1713,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     else { r['sh1'].rotation.x = 0.05 + sw + Math.sin(t * 0.8) * 0.03; r['sh-1'].rotation.x = 0.1 - sw; r['el1'].rotation.x = -0.12 - 0.1 * f; r['el-1'].rotation.x = -0.1 - 0.1 * f; r['sh1'].rotation.z = -0.05; r['sh-1'].rotation.z = 0.05; }
     r['sh1'].rotation.z += jit * 0.08; r['sh-1'].rotation.z -= jit * 0.05;
     if (c.shoutT > 0) { r['sh1'].rotation.x = -1.5; r['el1'].rotation.x = -0.1; }                 // il te désigne du bras
-    if (G.arrest && run) { r['sh1'].rotation.x = -1.2; r['sh-1'].rotation.x = -1.2; r['el1'].rotation.x = -0.4; r['el-1'].rotation.x = -0.4; }
+    if (G.arrest && G.arrest.cop === c) { const st = G.arrest.stage; r['sh1'].rotation.x = r['sh-1'].rotation.x = -1.3 + Math.sin(performance.now() / 70) * 0.12 * (st === 'down' ? 1 : 0.2); r['el1'].rotation.x = r['el-1'].rotation.x = -0.3; r.torso.rotation.x = 0.9; r.head.rotation.x = 0.1; }
     // Tête : lourde, en retard sur le corps, penchée ; balayage lent, saccadé quand il se méfie ; rejetée en arrière quand il crie
     const ty = run ? Math.sin(t * 3) * 0.12 : sus ? Math.sin(t * 1.6) * 0.8 + Math.sign(Math.sin(t * 0.9)) * 0.25 : Math.sin(t * 0.45) * 0.5;
     c.hy = (c.hy || 0) + (ty - (c.hy || 0)) * Math.min(1, dt * (sus ? 5 : 2));
@@ -1723,12 +1725,59 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     if (c.lamp) { const fx = Math.sin(c.facing + r.head.rotation.y), fz = Math.cos(c.facing + r.head.rotation.y); c.lamp.pos.set(c.x + fx * 0.9, c.y + 1.7, c.z + fz * 0.9); }   // la lampe frontale éclaire là où il regarde
   }
 
+  /* ---------- ARRESTATION EN 3 TEMPS (tout en première personne) ----------
+     1. 'shove' : il te percute, tu es bousculé et tu tombes (caméra qui bascule, vers le sol).
+     2. 'down'  : à terre, il est sur toi. ESPACE répété = te débattre : si la jauge se remplit tu te dégages et tu repars.
+     3. 'cuff'  : bras tordus dans le dos, menottes, noir, retour au début. */
   function arrest(c) {
     if (G.arrest) return;
-    if (G.mode === 'lab') { G.say && G.say('(labo : arrestation ignorée)', 1200); c.alert = 0.5; c.state = 'search'; c.searchT = 3; return; }
-    G.arrest = { t: 0 }; G.frozen = true; const P = G.P; P.vx = P.vz = 0;
-    snd('fx', 'arrest', 1); G.say && G.say('ARRÊTÉ', 900);
-    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.25s'; f.style.opacity = 1; }
+    const P = G.P; if (G.hidden) G.hidden.exit();
+    const dx = P.pos.x - c.x, dz = P.pos.z - c.z, d = Math.hypot(dx, dz) || 1;
+    G.arrest = { stage: 'shove', t: 0, cop: c, dir: [dx / d, dz / d], prog: 0, prevSp: !!G.keys.Space, said: 0, clicked: false };
+    G.frozen = true; P.vx = P.vz = 0; P.mode = 'move'; P.anim = null; snd('fx', 'cop_alert', 1);
+  }
+  function endArrest(escaped) {
+    const A = G.arrest, P = G.P, c = A.cop;
+    P.animRoll = P.animPitch = P.animDip = 0;
+    if (escaped) {                                                              // tu t'es dégagé : il est sonné, tu repars
+      G.arrest = null; G.frozen = false; P.stunT = 0.6; P.vx = A.dir[0] * 4.5; P.vz = A.dir[1] * 4.5; P.yaw += 0.0; c.state = 'search'; c.alert = 0.7; c.searchT = 6; c.staggerT = 2.0; c.last = [P.pos.x, P.pos.z]; c.speed = 0;
+      G.say && G.say('', 1); const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.2s'; f.style.opacity = 0; }
+      return;
+    }
+    if (G.mode === 'lab') { P.pos.set(0, 0, 4); P.safe.set(0, 0, 4); P.h = 1.75; P.eye = 1.62; P.pitch = 0; P.yaw = 0; G.resetCops(); G.alert = 0; G.arrest = null; G.frozen = false; }
+    else (G.resetLevel || respawn)();
+    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.45s'; f.style.opacity = 0; }
+  }
+  function updateArrest(dt) {
+    const A = G.arrest, P = G.P, c = A.cop, f = document.getElementById('fade'); A.t += dt;
+    const sp = !!G.keys.Space, edge = sp && !A.prevSp; A.prevSp = sp;
+    const k = (a, b) => G.clamp((A.t - a) / (b - a), 0, 1);
+    // le policier se plaque contre toi, penché sur toi
+    const tx = P.pos.x - A.dir[0] * 0.8, tz = P.pos.z - A.dir[1] * 0.8, r = Math.min(1, dt * 9);
+    c.x += (tx - c.x) * r; c.z += (tz - c.z) * r; c.facing = Math.atan2(A.dir[0], A.dir[1]); c.speed *= 0.8; c.state = 'chase'; c.alert = 1;
+    // caméra : on regarde le policier, on tombe en arrière, on finit au sol
+    const yawT = Math.atan2(-(c.x - P.pos.x), -(c.z - P.pos.z)); let dy = yawT - P.yaw; while (dy > Math.PI) dy -= 6.283; while (dy < -Math.PI) dy += 6.283; P.yaw += dy * Math.min(1, dt * 6);
+    const down = k(0, 0.55);
+    P.h += (1.75 - 1.3 * down - P.h) * Math.min(1, dt * 10);
+    P.animRoll += ((A.stage === 'cuff' ? -0.25 : 0.5) * down - P.animRoll) * Math.min(1, dt * 8);
+    P.animPitch += ((A.stage === 'cuff' ? 0.75 : -0.2 + 0.45 * (1 - down)) - P.animPitch) * Math.min(1, dt * 5);
+    if (A.t < 0.1) P.kickP = -0.12;
+    if (A.stage === 'shove' && A.t > 0.55) { A.stage = 'down'; A.tDown = A.t; }
+    if (A.stage === 'down') {
+      const others = cops.some(o => o !== c && Math.hypot(o.x - P.pos.x, o.z - P.pos.z) < 3.5);
+      if (edge) { A.prog += 0.2; P.kickR = (Math.random() - 0.5) * 0.25; P.kickP = -0.05; }
+      A.prog = Math.max(0, A.prog - dt * (others ? 0.5 : 0.28));
+      P.animRoll += Math.sin(A.t * 22) * 0.02 * A.prog;                                                     // tu te tords
+      if (A.t - A.said > 0.7) { A.said = A.t; G.say && G.say('ESPACE ! ' + '▮'.repeat(Math.round(A.prog * 10)) + '▯'.repeat(10 - Math.round(A.prog * 10)), 800); }
+      if (A.prog >= 1) { endArrest(true); return; }
+      if (A.t - A.tDown > 2.4) { A.stage = 'cuff'; A.tCuff = A.t; snd('fx', 'arrest', 1); G.say && G.say('', 1); }
+    }
+    if (A.stage === 'cuff') {
+      const u = A.t - A.tCuff;
+      if (u > 0.55 && !A.clicked) { A.clicked = true; P.kickP = 0.1; P.kickR = 0.08; }
+      if (u > 1.1 && f) { f.style.transition = 'opacity 0.3s'; f.style.opacity = 1; }
+      if (u > 1.6) endArrest(false);
+    }
   }
   // Sans niveau (grande carte) : retour devant la tour
   function respawn() {
@@ -1739,13 +1788,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   G.addCop = addCop;
 
   G.updateCops = function (dt) {
-    if (G.arrest) {
-      G.arrest.t += dt;
-      if (G.arrest.t > 0.6) {                                                  // noir quasi instantané, puis on repart tout de suite
-        (G.resetLevel || respawn)();
-        const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.45s'; f.style.opacity = 0; }
-      }
-    }
+    if (G.arrest) updateArrest(dt);
     let top = 0;
     for (const c of cops) { if (!c.frozenLab) think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
     G.alert += (top - G.alert) * Math.min(1, dt * 3);
