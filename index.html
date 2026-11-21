@@ -78,10 +78,11 @@
     <div class="row"><label>Qualité</label>
       <button data-q="low">BAS</button><button data-q="medium">MOYEN</button><button data-q="high">HAUT</button></div>
     <div class="row"><label>Sensibilité</label><input type="range" id="o-sens" min="0.4" max="2" step="0.05"></div>
+    <div class="row"><label>Mouvements brouillons</label><input type="range" id="o-chaos" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Volume général</label><input type="range" id="o-vol" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Musique</label><input type="range" id="o-music" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Effets</label><input type="range" id="o-fx" min="0" max="1" step="0.05"></div>
-    <p class="sub" style="margin:0;font-size:.7rem">Bas = plus fluide, image plus floue.</p>
+    <p class="sub" style="margin:0;font-size:.7rem">Bas = plus fluide, image plus floue. Brouillons : 0 = précis, 1 = chaotique.</p>
     <button id="b-back">RETOUR</button>
   </div>
   <div class="panel" id="p-load" hidden>
@@ -107,7 +108,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'player', 'audio', 'game'];
-  const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9 };
+  const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };
   const show = id => { for (const p of ['p-main', 'p-opt', 'p-load']) $(p).hidden = p !== id; };
@@ -119,10 +120,11 @@
   // --- Options ---
   function refreshOpt() {
     document.querySelectorAll('[data-q]').forEach(b => b.classList.toggle('on', b.dataset.q === S.quality));
-    $('o-sens').value = S.sens; $('o-vol').value = S.volume; $('o-music').value = S.music; $('o-fx').value = S.fx;
+    $('o-sens').value = S.sens; $('o-chaos').value = S.chaos; $('o-vol').value = S.volume; $('o-music').value = S.music; $('o-fx').value = S.fx;
   }
   document.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { S.quality = b.dataset.q; save(); refreshOpt(); }));
   $('o-sens').addEventListener('input', e => { S.sens = +e.target.value; save(); });
+  $('o-chaos').addEventListener('input', e => { S.chaos = +e.target.value; save(); });
   $('o-vol').addEventListener('input', e => { S.volume = +e.target.value; save(); });
   $('o-music').addEventListener('input', e => { S.music = +e.target.value; save(); });
   $('o-fx').addEventListener('input', e => { S.fx = +e.target.value; save(); });

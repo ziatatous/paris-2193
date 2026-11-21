@@ -72,6 +72,8 @@
 
   const xlim = z => { const row = (z + 0.65) / 4 + 25; return ((40 + 3 * Math.sin(row / 3) + 2 * Math.sin(row / 1.3)) - 6) * 4 - 2; };   // bord est de la ville
   G.isField = (x, z) => x > xlim(z) + 1;
+  // Filet de sécurité : un point au sol hors de l'espace libre (dans la masse des bâtiments) ou hors de la carte n'est pas jouable
+  G.isPlayable = (x, z) => (x > TOWER.x0 && x < TOWER.x1 && z > TOWER.z0 && z < TOWER.z1) || (x > X0 && x < X1 + 4 && z > Z0 && z < Z1 && sdf(x, z) < 0.8);
 
   function distSeg(x, z, p, q) {
     const dx = q[0] - p[0], dz = q[1] - p[1]; let t = ((x - p[0]) * dx + (z - p[1]) * dz) / (dx * dx + dz * dz || 1); t = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -116,7 +118,7 @@
       let nx = -(bz - az) / len, nz = (bx - ax) / len;
       if (sdf(mx + nx * 0.3, mz + nz * 0.3) > sdf(mx - nx * 0.3, mz - nz * 0.3)) { nx = -nx; nz = -nz; }   // normale vers l'espace libre
       if (-(bz - az) * nx + (bx - ax) * nz < 0) { const tx = ax, tz = az; ax = bx; az = bz; bx = tx; bz = tz; }     // sens des triangles
-      const h = 9 + 6 * G.hash2(Math.floor(mx / 15), Math.floor(mz / 15));
+      const h = 12 + 6 * G.hash2(Math.floor(mx / 15), Math.floor(mz / 15));   // toujours >= 12 m : plus haut que ce qu'on peut grimper
       G.addSegCollider(ax, az, bx, bz, 0, h);
       walls.push({ mx, mz, nx, nz, h, len });
       const levels = LV.filter(y => y < h - 0.5).concat([h]), base = pos.length / 3;
@@ -170,6 +172,7 @@
     p.needsUpdate = true; g.setAttribute('color', new T.BufferAttribute(col, 3));
     G.scene.add(new T.Mesh(g, G.mat.asphalt));
     // Murs invisibles aux limites de la zone plate (le brouillard cache le reste)
+    G.addBoxCollider(X0 - 10, X1 + 10, 12.4, 13.0, Z0 - 10, Z1 + 10);       // plafond invisible : impossible de monter au-dessus des murs (jamais de pied plus haut que ~10,6 m)
     G.addBoxCollider(X1, X1 + 5, -5, 40, Z0 - 5, Z1 + 5); G.addBoxCollider(X0 - 5, X1 + 5, -5, 40, Z0 - 5, Z0); G.addBoxCollider(X0 - 5, X1 + 5, -5, 40, Z1, Z1 + 5);
   }
 

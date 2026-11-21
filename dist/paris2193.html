@@ -78,10 +78,11 @@
     <div class="row"><label>Qualité</label>
       <button data-q="low">BAS</button><button data-q="medium">MOYEN</button><button data-q="high">HAUT</button></div>
     <div class="row"><label>Sensibilité</label><input type="range" id="o-sens" min="0.4" max="2" step="0.05"></div>
+    <div class="row"><label>Mouvements brouillons</label><input type="range" id="o-chaos" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Volume général</label><input type="range" id="o-vol" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Musique</label><input type="range" id="o-music" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Effets</label><input type="range" id="o-fx" min="0" max="1" step="0.05"></div>
-    <p class="sub" style="margin:0;font-size:.7rem">Bas = plus fluide, image plus floue.</p>
+    <p class="sub" style="margin:0;font-size:.7rem">Bas = plus fluide, image plus floue. Brouillons : 0 = précis, 1 = chaotique.</p>
     <button id="b-back">RETOUR</button>
   </div>
   <div class="panel" id="p-load" hidden>
@@ -110,7 +111,7 @@
   G.T = window.THREE;
 
   // --- Réglages du joueur (sauvegardés dans le navigateur si possible) ---
-  G.settings = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9 };
+  G.settings = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   G.loadSettings = function () {
     try { Object.assign(G.settings, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   };
@@ -859,6 +860,8 @@
 
   const xlim = z => { const row = (z + 0.65) / 4 + 25; return ((40 + 3 * Math.sin(row / 3) + 2 * Math.sin(row / 1.3)) - 6) * 4 - 2; };   // bord est de la ville
   G.isField = (x, z) => x > xlim(z) + 1;
+  // Filet de sécurité : un point au sol hors de l'espace libre (dans la masse des bâtiments) ou hors de la carte n'est pas jouable
+  G.isPlayable = (x, z) => (x > TOWER.x0 && x < TOWER.x1 && z > TOWER.z0 && z < TOWER.z1) || (x > X0 && x < X1 + 4 && z > Z0 && z < Z1 && sdf(x, z) < 0.8);
 
   function distSeg(x, z, p, q) {
     const dx = q[0] - p[0], dz = q[1] - p[1]; let t = ((x - p[0]) * dx + (z - p[1]) * dz) / (dx * dx + dz * dz || 1); t = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -903,7 +906,7 @@
       let nx = -(bz - az) / len, nz = (bx - ax) / len;
       if (sdf(mx + nx * 0.3, mz + nz * 0.3) > sdf(mx - nx * 0.3, mz - nz * 0.3)) { nx = -nx; nz = -nz; }   // normale vers l'espace libre
       if (-(bz - az) * nx + (bx - ax) * nz < 0) { const tx = ax, tz = az; ax = bx; az = bz; bx = tx; bz = tz; }     // sens des triangles
-      const h = 9 + 6 * G.hash2(Math.floor(mx / 15), Math.floor(mz / 15));
+      const h = 12 + 6 * G.hash2(Math.floor(mx / 15), Math.floor(mz / 15));   // toujours >= 12 m : plus haut que ce qu'on peut grimper
       G.addSegCollider(ax, az, bx, bz, 0, h);
       walls.push({ mx, mz, nx, nz, h, len });
       const levels = LV.filter(y => y < h - 0.5).concat([h]), base = pos.length / 3;
@@ -957,6 +960,7 @@
     p.needsUpdate = true; g.setAttribute('color', new T.BufferAttribute(col, 3));
     G.scene.add(new T.Mesh(g, G.mat.asphalt));
     // Murs invisibles aux limites de la zone plate (le brouillard cache le reste)
+    G.addBoxCollider(X0 - 10, X1 + 10, 12.4, 13.0, Z0 - 10, Z1 + 10);       // plafond invisible : impossible de monter au-dessus des murs (jamais de pied plus haut que ~10,6 m)
     G.addBoxCollider(X1, X1 + 5, -5, 40, Z0 - 5, Z1 + 5); G.addBoxCollider(X0 - 5, X1 + 5, -5, 40, Z0 - 5, Z0); G.addBoxCollider(X0 - 5, X1 + 5, -5, 40, Z1, Z1 + 5);
   }
 
@@ -1115,13 +1119,18 @@
   G.P = null;
   const snd = (n, a, b, c) => { const f = G.audio && G.audio[n]; if (f) f(a, b, c); };
   const ease = u => u * u * (3 - 2 * u);
+  // "Brouillon" (0 = propre et précis, 1 = chaotique, façon Straftat) : réglage du menu. Inertie, secousses de caméra, passements imparfaits.
+  const CH = () => (G.settings && G.settings.chaos !== undefined ? G.settings.chaos : 0.6);
+  const noise = (t, s) => Math.sin(t * 7.3 + s) * 0.5 + Math.sin(t * 13.1 + s * 2) * 0.3 + Math.sin(t * 3.7 + s * 3) * 0.2;
+  const rr = () => Math.random() - 0.5;
 
   G.initPlayer = function () {
     // Départ : dans l'appartement, entre le lit et le bureau, face à la fenêtre (vers -z)
     G.P = { pos: new T.Vector3(0.1, 9.0, 0.9), vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, onGround: true, mode: 'move', h: H_STAND,
       eye: 9.0 + EYE, coyote: 0, jumpBuf: 0, rollBuf: 0, dashT: 0, dashCD: 0, dashAir: false, dashX: 0, dashZ: -1, slideT: 0, stunT: 0, wallT: 0, wallCD: 0, wallLost: 0,
       wallN: null, wallSide: 1, wallUsed: false, anim: null, rollT: 0, cutDone: false, stepDist: 0, lastStep: 0, bobAmp: 0, exert: 0, dip: 0, fovKick: 0,
-      camRoll: 0, animRoll: 0, animPitch: 0, animDip: 0, spin: 0, sprint: false, speed: 0, lean: 0 };
+      camRoll: 0, animRoll: 0, animPitch: 0, animDip: 0, spin: 0, sprint: false, speed: 0, lean: 0,
+      kickP: 0, kickR: 0, kickY: 0, skidCD: 0, safe: new T.Vector3(0.1, 9.0, 0.9), safeT: 0 };
     G.updateCamera(0, 0);
   };
 
@@ -1146,7 +1155,7 @@
       if (edge >= 0) {
         const s = 0.1 + edge * 0.15 + 0.5, lx = x + dx * (d0 + s), lz = z + dz * (d0 + s), gy = G.groundAt(lx, lz, topY - 0.1, R * 0.9, 0.1);
         if (topY - gy >= 0.25 && !G.blocked(lx, lz, gy, H_STAND, R)) {
-          P.anim = { type: 'vault', t: 0, dur: P.sprint ? 0.5 : 0.62, x0: x, z0: z, y0: y, x1: lx, z1: lz, y1: gy, top: topY, side: Math.random() < 0.5 ? -1 : 1, keep: Math.max(Math.hypot(P.vx, P.vz), 3.5), dx, dz };
+          P.anim = { type: 'vault', t: 0, dur: (P.sprint ? 0.5 : 0.62) * (1 + rr() * 0.5 * CH()), x0: x, z0: z, y0: y, x1: lx, z1: lz, y1: gy, top: topY, side: Math.random() < 0.5 ? -1 : 1, amp: 0.3 * (1 + rr() * 0.8 * CH()), keep: Math.max(Math.hypot(P.vx, P.vz), 3.5) * (1 + rr() * 0.3 * CH()), dx, dz };
           return true;
         }
       }
@@ -1155,7 +1164,7 @@
       for (let s = 0.35; s <= 1.0; s += 0.15) {
         const lx = x + dx * (d0 + s), lz = z + dz * (d0 + s);
         if (onTop(lx, lz, topY) && !G.blocked(lx, lz, topY, H_STAND - 0.1, R)) {
-          P.anim = { type: 'mantle', t: 0, dur: 0.38 + 0.2 * h, x0: x, z0: z, y0: y, x1: lx, z1: lz, y1: topY, top: topY, side: 0, keep: 1.5, dx, dz };
+          P.anim = { type: 'mantle', t: 0, dur: (0.38 + 0.2 * h) * (1 + rr() * 0.5 * CH()), amp: 0, x0: x, z0: z, y0: y, x1: lx, z1: lz, y1: topY, top: topY, side: 0, keep: 1.5, dx, dz };
           return true;
         }
       }
@@ -1167,7 +1176,7 @@
     if (a.type === 'vault') {
       P.pos.x = a.x0 + (a.x1 - a.x0) * e; P.pos.z = a.z0 + (a.z1 - a.z0) * e;
       P.pos.y = a.y0 + (a.y1 - a.y0) * e + Math.max(0, a.top + 0.18 - (a.y0 + a.y1) / 2) * Math.sin(Math.PI * u);
-      P.animRoll = a.side * 0.3 * Math.sin(Math.PI * u); P.animPitch = -0.1 * Math.sin(Math.PI * u); P.animDip = 0.18 * Math.sin(Math.PI * u);
+      P.animRoll = a.side * a.amp * Math.sin(Math.PI * u); P.animPitch = -0.1 * Math.sin(Math.PI * u); P.animDip = 0.18 * Math.sin(Math.PI * u);
     } else {
       P.pos.y = a.y0 + (a.y1 - a.y0) * ease(Math.min(1, u / 0.65));
       const f = ease(Math.max(0, (u - 0.35) / 0.65)); P.pos.x = a.x0 + (a.x1 - a.x0) * f; P.pos.z = a.z0 + (a.z1 - a.z0) * f;
@@ -1176,6 +1185,7 @@
     if (u >= 1) {
       P.pos.set(a.x1, a.y1, a.z1); P.vx = a.dx * a.keep; P.vz = a.dz * a.keep; P.vy = 0; P.onGround = true; P.mode = 'move'; P.anim = null;
       P.animRoll = P.animPitch = P.animDip = 0; P.coyote = 0.05;
+      if (a.type === 'vault' && Math.random() < 0.12 * CH()) { P.stunT = 0.22; P.kickP -= 0.06; P.kickR += rr() * 0.12; }      // parfois on s'accroche et on trébuche à la sortie
     }
   }
 
@@ -1199,6 +1209,10 @@
     const sn = Math.sin(P.yaw), cs = Math.cos(P.yaw);
     const wx = fx * cs + fz * sn, wz = -fx * sn + fz * cs, wants = (fx || fz) !== 0;
     const stunned = P.stunT > 0, hv = Math.hypot(P.vx, P.vz);
+    P.skidCD -= dt;
+    if (P.onGround && P.mode === 'move' && hv > 4.2 && wants && P.skidCD <= 0 && (P.vx * wx + P.vz * wz) / hv < -0.2) {   // demi-tour en courant : on dérape, la caméra part de travers
+      P.skidCD = 0.5; P.kickR += (Math.random() < 0.5 ? -1 : 1) * 0.07 * CH(); P.kickP -= 0.03 * CH(); snd('thud', 0.1, 100, 0.12);
+    }
     P.sprint = wants && (k.ShiftLeft || k.ShiftRight) && fz <= 0.1 && !stunned && P.mode !== 'slide' && !k.KeyC;
 
     // --- Accroupi / debout ---
@@ -1213,6 +1227,7 @@
     // --- Dash (F) ---
     if (dashPressed && P.dashCD <= 0 && !stunned && P.mode !== 'wallrun' && (P.onGround || !P.dashAir)) {
       let dx = wants ? wx : -Math.sin(P.yaw), dz = wants ? wz : -Math.cos(P.yaw);
+      { const ang = rr() * 0.25 * CH(), ca = Math.cos(ang), sa = Math.sin(ang), ndx = dx * ca - dz * sa; dz = dx * sa + dz * ca; dx = ndx; P.kickP -= 0.05 * CH(); P.kickR += rr() * 0.1 * CH(); }   // un dash n'est jamais parfaitement droit
       P.dashX = dx; P.dashZ = dz; P.dashT = 0.22; P.dashCD = 0.85; P.fovKick = 12; if (!P.onGround) P.dashAir = true; if (P.mode === 'slide') P.mode = 'move';
       P.vx = dx * 16; P.vz = dz * 16; if (!P.onGround) P.vy = Math.max(P.vy * 0.3, 0.6); snd('dash');
     }
@@ -1259,15 +1274,21 @@
       P.rollT -= dt; if (P.rollT <= 0) { P.mode = 'move'; P.spin = 0; }
     } else if (P.mode !== 'wallrun') {
       const tx = wx * speed, tz = wz * speed, ddx = tx - P.vx, ddz = tz - P.vz, dl = Math.hypot(ddx, ddz);
-      const rate = P.onGround ? (wants ? (P.sprint ? 17 : 20) : 24) : (wants ? 5 : 0.4);      // m/s gagnés par seconde
+      const rate = (P.onGround ? (wants ? (P.sprint ? 17 : 20) : 24) : (wants ? 5 : 0.4)) * (P.onGround ? 1 - 0.5 * CH() : 1);      // m/s gagnés par seconde
       const md = rate * dt;
       if (dl <= md) { P.vx = tx; P.vz = tz; } else { P.vx += ddx / dl * md; P.vz += ddz / dl * md; }
     }
 
     // --- Déplacement horizontal + murs ---
-    p.x += P.vx * dt; p.z += P.vz * dt;
-    const contact = G.pushOut(p, p.y, P.h, R, STEP);
-    if (contact) { const vn = P.vx * contact.x + P.vz * contact.z; if (vn < 0) { P.vx -= vn * contact.x; P.vz -= vn * contact.z; } }
+    let contact = null, impact = 0; const nSub = Math.max(1, Math.ceil(Math.hypot(P.vx, P.vz) * dt / 0.2));     // petits pas : impossible de traverser un mur, même en dash
+    for (let s = 0; s < nSub; s++) {
+      p.x += P.vx * dt / nSub; p.z += P.vz * dt / nSub;
+      const c = G.pushOut(p, p.y, P.h, R, STEP);
+      if (c) { contact = c; const vn = P.vx * c.x + P.vz * c.z; if (vn < 0) { impact = Math.min(impact, vn); P.vx -= vn * c.x; P.vz -= vn * c.z; } }
+    }
+    if (impact < -3 && P.mode === 'move') {                                        // on rentre dans un mur : choc d'épaule, secousse, petit ralentissement
+      const f = Math.min(1, -impact / 7) * CH(); P.kickP -= 0.04 * f; P.kickR += rr() * 0.12 * f; if (impact < -5.5) P.stunT = Math.max(P.stunT, 0.14 * f); snd('thud', 0.15 * f + 0.05, 90, 0.15);
+    }
 
     // --- Course sur mur (en l'air, vite, contre un grand mur) puis glissade si on insiste ---
     if (P.mode === 'move' && !P.onGround && !P.wallUsed && contact && P.wallCD <= 0 && wants && fz < 0.1 && contact.c.maxY > p.y + 2.2 && p.y > G.groundAt(p.x, p.z, p.y, R, 0.02) + 0.7) {
@@ -1303,7 +1324,10 @@
       p.y = ny;
     }
     if (P.onGround) P.dashAir = false;
-    if (p.y < -12) { p.set(0.1, 9.0, 0.9); P.vx = P.vy = P.vz = 0; P.eye = 9 + EYE; P.onGround = true; P.mode = 'move'; }
+    // Filet de sécurité : si on se retrouve hors de l'espace libre (dans la masse des immeubles, hors carte, dans le vide), retour au dernier endroit sûr
+    if (P.onGround && p.y < 3 && G.isPlayable && !G.isPlayable(p.x, p.z)) { p.copy(P.safe); P.vx = P.vy = P.vz = 0; P.eye = p.y + EYE; P.mode = 'move'; }
+    else if (P.onGround && P.mode === 'move' && (P.safeT -= dt) <= 0 && (!G.isPlayable || G.isPlayable(p.x, p.z))) { P.safe.copy(p); P.safeT = 0.4; }
+    if (p.y < -12) { p.copy(P.safe); P.vx = P.vy = P.vz = 0; P.eye = p.y + EYE; P.onGround = true; P.mode = 'move'; }
 
     // --- Atterrissage : roulade, chute mal réceptionnée, simple creux ---
     if (landedFall > 3) {
@@ -1315,12 +1339,13 @@
       else { P.dip = G.clamp(landedFall / 60, 0.03, 0.2); snd('thud', G.clamp(landedFall / 14, 0.1, 0.5), 70, 0.25); }
     }
 
+    if (landedFall > 3) { const f = CH(); P.kickP -= G.clamp(landedFall / 40, 0, 0.3) * f; P.kickR += rr() * 0.06 * f; const lat = rr() * 1.6 * f; P.vx += cs * lat; P.vz += -sn * lat; }   // réception approximative
     // --- Pas, essoufflement ---
     const horiz = Math.hypot(P.vx, P.vz); P.speed = horiz;
     if (P.onGround && horiz > 0.4 && P.mode !== 'slide' && P.mode !== 'roll') {
       P.stepDist += horiz * dt;
       const stride = P.sprint ? 1.55 : 0.8, n = Math.floor(P.stepDist / stride);
-      if (n > P.lastStep) snd('footstep', P.sprint, G.zoneAt(p));
+      if (n > P.lastStep) { snd('footstep', P.sprint, G.zoneAt(p)); const k2 = (P.sprint ? 2 : 1) * CH(); P.kickP += rr() * 0.025 * k2; P.kickR += rr() * 0.035 * k2; }
       P.lastStep = n;
     }
     P.exert = G.clamp(P.exert + (P.sprint && horiz > 3 ? 0.2 : P.mode === 'slide' ? 0.05 : -0.07) * dt, 0, 1);
@@ -1341,7 +1366,10 @@
     P.bobAmp = G.lerp(P.bobAmp, grounded ? G.clamp(horiz / RUN, 0, 1) : 0, Math.min(1, dt * 6));
     const stride = P.sprint ? 1.55 : 0.8, phase = P.stepDist / stride * Math.PI, run = P.sprint ? 1 : 0.4;
     const bobY = Math.abs(Math.sin(phase)) * (0.035 + run * 0.05) * P.bobAmp;
-    const bobX = Math.sin(phase) * (0.02 + run * 0.025) * P.bobAmp;
+    const ch = CH(), sp = G.clamp(horiz / RUN, 0, 1.2);
+    const bobX = Math.sin(phase) * (0.02 + run * 0.025) * P.bobAmp + Math.sin(phase * 0.5) * 0.012 * ch * P.bobAmp;
+    P.kickP *= Math.exp(-9 * dt); P.kickR *= Math.exp(-9 * dt);
+    const shP = noise(time, 1) * 0.014 * ch * sp + P.kickP, shY = noise(time, 2) * 0.010 * ch * sp, shR = noise(time, 3) * 0.022 * ch * sp + P.kickR;
     let rollT = Math.sin(phase) * (0.006 + run * 0.012) * P.bobAmp - P.lean * 0.035 + P.animRoll;      // inclinaison cible
     if (P.mode === 'wallrun') rollT += P.wallSide * 0.26 * (P.wallT < 0.9 ? 1 : 0.5 + 0.5 * Math.sin(time * 40)) ;
     if (P.mode === 'slide') rollT += 0.06; if (P.stunT > 0) rollT += Math.sin(time * 30) * 0.03;
@@ -1350,7 +1378,7 @@
     const breath = Math.sin(time * 1.1) * 0.004 * (1 + P.exert * 2.5);
     const dip = P.dip + P.animDip + (P.mode === 'slide' ? 0.0 : 0);
     cam.position.set(P.pos.x + Math.cos(P.yaw) * bobX, P.eye + bobY + breath - dip, P.pos.z - Math.sin(P.yaw) * bobX);
-    cam.rotation.set(P.pitch + P.animPitch + spin - bobY * 0.12, P.yaw, P.camRoll);
+    cam.rotation.set(P.pitch + P.animPitch + spin - bobY * 0.12 + shP, P.yaw + shY, P.camRoll + shR);
     P.fovKick = Math.max(0, P.fovKick - dt * 28);
     const fovT = 70 + (P.sprint ? 6 : 0) * P.bobAmp + P.fovKick + (P.mode === 'slide' ? 5 : 0) + (P.mode === 'wallrun' ? 4 : 0);
     if (Math.abs(cam.fov - fovT) > 0.05) { cam.fov += (fovT - cam.fov) * Math.min(1, dt * 9); cam.updateProjectionMatrix(); }
@@ -1583,7 +1611,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'player', 'audio', 'game'];
-  const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9 };
+  const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };
   const show = id => { for (const p of ['p-main', 'p-opt', 'p-load']) $(p).hidden = p !== id; };
@@ -1595,10 +1623,11 @@
   // --- Options ---
   function refreshOpt() {
     document.querySelectorAll('[data-q]').forEach(b => b.classList.toggle('on', b.dataset.q === S.quality));
-    $('o-sens').value = S.sens; $('o-vol').value = S.volume; $('o-music').value = S.music; $('o-fx').value = S.fx;
+    $('o-sens').value = S.sens; $('o-chaos').value = S.chaos; $('o-vol').value = S.volume; $('o-music').value = S.music; $('o-fx').value = S.fx;
   }
   document.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { S.quality = b.dataset.q; save(); refreshOpt(); }));
   $('o-sens').addEventListener('input', e => { S.sens = +e.target.value; save(); });
+  $('o-chaos').addEventListener('input', e => { S.chaos = +e.target.value; save(); });
   $('o-vol').addEventListener('input', e => { S.volume = +e.target.value; save(); });
   $('o-music').addEventListener('input', e => { S.music = +e.target.value; save(); });
   $('o-fx').addEventListener('input', e => { S.fx = +e.target.value; save(); });
