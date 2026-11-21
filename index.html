@@ -62,7 +62,7 @@
 <canvas id="game"></canvas>
 <div id="fade"></div>
 <div id="title">PARIS &nbsp;·&nbsp; 2193</div>
-<div id="prompt"></div><div id="caption"></div><div id="hint">Z Q S D  marcher &nbsp;·&nbsp; Maj  courir &nbsp;·&nbsp; Espace  sauter &nbsp;·&nbsp; E  interagir &nbsp;·&nbsp; M  musique</div>
+<div id="prompt"></div><div id="caption"></div><div id="hint">Z Q S D  marcher &nbsp;·&nbsp; Maj  courir &nbsp;·&nbsp; Espace  sauter / franchir &nbsp;·&nbsp; C  glisser, rouler &nbsp;·&nbsp; F  dash &nbsp;·&nbsp; E  interagir</div>
 
 <div id="menu">
   <div id="bg"></div><div id="bgfog"></div>
@@ -106,7 +106,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const FILES = ['core', 'render', 'textures', 'world', 'player', 'audio', 'game'];
+  const FILES = ['core', 'render', 'textures', 'physics', 'world', 'city', 'player', 'audio', 'game'];
   const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9 };
   try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };

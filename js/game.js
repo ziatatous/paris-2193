@@ -56,7 +56,7 @@
     addEventListener('keydown', e => {
       G.keys[e.code] = true;
       if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
-      if (e.code === 'KeyM') G.audio.toggleMusic();
+      if (e.key && e.key.toLowerCase() === 'm') G.audio.toggleMusic();   // la lettre M, quelle que soit la disposition du clavier
       if (e.code === 'KeyE' && playing && G.focus) G.focus.use();
     });
     addEventListener('keyup', e => { G.keys[e.code] = false; });
@@ -88,13 +88,13 @@
 
   function loop(now) {
     requestAnimationFrame(loop);
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
+    const dt = G.clamp((now - last) / 1000, 0, 0.05); last = now; time += dt;   // jamais négatif ni trop grand
     if (playing) { G.updatePlayer(dt); updateInteract(); }
     G.updateCamera(dt, time);
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
     const zone = G.zoneAt(G.P.pos);
-    G.scene.fog.density += ((zone === 'in' ? 0.04 : 0.09) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
+    G.scene.fog.density += ((zone === 'in' ? 0.04 : zone === 'field' ? 0.075 : 0.09) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
     if (playing) { G.camera.getWorldDirection(fwd); G.audio.update(dt, G.camera.position, fwd, zone, G.P.exert); }
     G.render(time);
   }

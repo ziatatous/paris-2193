@@ -7,7 +7,7 @@
 (function () {
   'use strict';
   const G = window.G, T = G.T;
-  G.colliders = []; G.lamps = []; G.interactables = []; G.animated = [];
+  G.lamps = []; G.interactables = []; G.animated = [];
 
   /* ---------------------------------------------------------------
      BRIQUES DE BASE
@@ -37,7 +37,7 @@
       mesh = new T.Mesh(boxGeo(w, h, d, cx, cy, cz, o.tile || 2.5, o.grime !== false, o.grimeBase !== undefined ? o.grimeBase : y0), mat);
       mesh.position.set(cx, cy, cz); G.scene.add(mesh);
     }
-    if (o.collide !== false) G.colliders.push({ minX: x0, maxX: x1, minY: y0, maxY: y1, minZ: z0, maxZ: z1 });
+    if (o.collide !== false) G.addBoxCollider(x0, x1, y0, y1, z0, z1);
     return mesh;
   };
   // Mur avec ouvertures (portes, fenêtres). axis 'z' : épaisseur en z [c0,c1], longueur en x [a0,a1].
@@ -63,7 +63,7 @@
   G.glassPane = function (x0, x1, y0, y1, z0, z1) {   // vitre : transparente mais solide
     const m = new T.Mesh(new T.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), G.mat.glass);
     m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); G.scene.add(m);
-    G.colliders.push({ minX: x0, maxX: x1, minY: y0, maxY: y1, minZ: z0, maxZ: z1 });
+    G.addBoxCollider(x0, x1, y0, y1, z0, z1);
   };
 
   /* ---------------------------------------------------------------
@@ -115,7 +115,7 @@
   /* ---------------------------------------------------------------
      OÙ SUIS-JE ? (sert à ajuster brouillard et son)
      --------------------------------------------------------------- */
-  G.zoneAt = function (p) { return (p.x > -2.1 && p.x < 2.1 && p.z > -2.65 && p.z < 8.3) ? 'in' : 'out'; };
+  G.zoneAt = function (p) { return (p.x > -2.1 && p.x < 2.1 && p.z > -2.65 && p.z < 8.3) ? 'in' : (G.isField && G.isField(p.x, p.z) ? 'field' : 'out'); };
 
   /* ---------------------------------------------------------------
      LA TOUR : appartement (y=9) + escalier + hall
@@ -192,50 +192,6 @@
   }
 
   /* ---------------------------------------------------------------
-     LA RUE : un canyon de blocs brutalistes, des lampadaires faibles, quelques obstacles à franchir
-     --------------------------------------------------------------- */
-  function buildStreet() {
-    const M = G.mat;
-    G.B(-20, 20, -1, 0, -76, -2.65, M.asphalt, { tile: 3, grime: false });                                   // chaussée
-    G.B(-6, -2.1, 0, 20, -2.65, 8.3, M.concrete); G.B(2.1, 6, 0, 20, -2.65, 8.3, M.concrete);                 // ailes de la tour
-    G.B(-20, -6, 0, 24, -76, -2.65, M.concrete, { tile: 2.5 }); G.B(6, 20, 0, 24, -76, -2.65, M.concrete, { tile: 2.5 });   // grands blocs
-    G.B(-20, 20, 0, 24, -78, -76, M.concreteDark);                                                          // fond de la rue (fermé)
-
-    // Fentes de fenêtres : un seul objet "instancié" par côté (très peu coûteux)
-    const slitMat = new T.MeshPhongMaterial({ color: 0x060708, shininess: 4 }), litMat = new T.MeshBasicMaterial({ color: 0x5b4c32 });
-    for (const side of [-1, 1]) {
-      const spots = [];
-      for (let z = -73; z < -6; z += 3.2) for (let y = 3; y <= 20; y += 3) spots.push([2 * side * 3 - side * 0.04 + side * 0, y, z]);
-      const dark = spots.filter(() => G.rnd() > 0.15), lit = dark.filter(() => G.rnd() < 0.05);
-      const make = (list, mat) => { const im = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), mat, list.length), d = new T.Object3D();
-        list.forEach((s, i) => { d.position.set(side * 6 - side * 0.02, s[1], s[2]); d.scale.set(0.08, 1.3, 1.5); d.updateMatrix(); im.setMatrixAt(i, d.matrix); }); G.scene.add(im); };
-      make(dark, slitMat); make(lit, litMat);
-    }
-    // Passerelle ouest à 3,2 m : escalier, longue dalle, vide de 3 m (il faut COURIR pour le franchir), seconde dalle
-    for (let i = 1; i <= 16; i++) { const top = 0.2 * i, z0 = -9 - (i - 1) * 0.3; G.B(-5.6, -4.2, Math.max(0, top - 0.3), top, z0 - 0.3, z0, M.concreteDark, { grime: false }); }
-    G.B(-6, -4.2, 2.9, 3.2, -34, -13.8, M.concreteDark, { grime: false }); G.B(-6, -4.2, 2.9, 3.2, -49, -37, M.concreteDark, { grime: false });
-    for (const z of [-20, -27, -33.6, -38, -48.6]) G.B(-4.7, -4.3, 0, 2.9, z - 0.2, z + 0.2, M.concrete);
-    // Blocs à escalader côté est (hauteurs croissantes : 1 m, 2 m, 3 m)
-    G.B(4.6, 6, 0, 1.0, -20, -17, M.concrete); G.B(4.6, 6, 0, 2.0, -24, -21, M.concrete); G.B(4.6, 6, 0, 3.0, -28, -25, M.concrete);
-    // Obstacles : barrières de chantier, jardinières, banc
-    G.B(-2.5, -1.0, 0, 0.8, -16, -14.5, M.concrete); G.B(1.5, 3.2, 0, 0.8, -31, -29.5, M.concrete); G.B(-1.2, 0.4, 0, 0.8, -44, -42.5, M.concrete);
-    G.B(3.0, 4.6, 0, 0.7, -40, -38, M.concrete); G.B(-3.6, -2.2, 0, 0.5, -8, -6.5, M.concreteDark); G.B(2.6, 4.2, 0, 0.45, -8, -6.8, M.concreteDark);
-    // Tonneaux (gardés tels quels : cylindres rouillés à cerclages)
-    for (const [x, z] of [[4.5, -11], [5.1, -11.7], [-4.2, -40], [-3.5, -40.6], [0.5, -56]]) {
-      const b = new T.Mesh(new T.CylinderGeometry(0.3, 0.3, 0.9, 14), M.metal); b.position.set(x, 0.45, z); G.scene.add(b);
-      for (const y of [0.08, 0.45, 0.82]) { const r = new T.Mesh(new T.CylinderGeometry(0.315, 0.315, 0.04, 14), M.iron); r.position.set(x, y, z); G.scene.add(r); }
-      G.colliders.push({ minX: x - 0.3, maxX: x + 0.3, minY: 0, maxY: 0.9, minZ: z - 0.3, maxZ: z + 0.3 });
-    }
-    // Lampadaires : lueur sodium sale, faible. Les halos restent visibles de loin dans le brouillard.
-    [[-5.0, -8], [5.0, -17], [-5.0, -26], [5.0, -35], [-5.0, -44], [5.0, -53], [-5.0, -62], [5.0, -70]].forEach(([x, z], i) => {
-      const pole = new T.Mesh(new T.CylinderGeometry(0.05, 0.07, 5.5, 8), M.iron); pole.position.set(x, 2.75, z); G.scene.add(pole);
-      const arm = new T.Mesh(new T.BoxGeometry(Math.abs(x) * 0.0 + 0.9, 0.06, 0.06), M.iron); arm.position.set(x - Math.sign(x) * 0.45, 5.5, z); G.scene.add(arm);
-      G.colliders.push({ minX: x - 0.08, maxX: x + 0.08, minY: 0, maxY: 5.5, minZ: z - 0.08, maxZ: z + 0.08 });
-      G.addLamp({ x: x - Math.sign(x) * 0.9, y: 5.4, z, color: 0xffa44a, I: 0.95, dist: 14, halo: 5.5, flicker: i === 3 ? 0.6 : 0, fogHalo: true });
-    });
-  }
-
-  /* ---------------------------------------------------------------
      LE CORPS dans la rue (même retenue qu'avant, sans scène scriptée pour l'instant)
      --------------------------------------------------------------- */
   function limb(group, mat, p0, p1, r0, r1, seg) {
@@ -247,8 +203,8 @@
   function ball(group, mat, p, r, sx, sy, sz, seg) {
     const m = new T.Mesh(new T.SphereGeometry(r, seg || 12, (seg || 12) - 2), mat); m.position.set(...p); m.scale.set(sx || 1, sy || 1, sz || 1); group.add(m); return m;
   }
-  function buildBody() {
-    const g = new T.Group(); g.position.set(-3.2, 0, -21.5); g.rotation.y = 0.15;
+  G.buildBody = function (px, pz, ry) {
+    const g = new T.Group(); g.position.set(px, 0, pz); g.rotation.y = ry || 0;
     const ph = c => new T.MeshPhongMaterial({ color: c, shininess: 6 });
     const jacket = ph(0x1b1e21), pants = ph(0x14161a), skin = new T.MeshPhongMaterial({ color: 0x7d7068, shininess: 10 }), dark = ph(0x0c0c0e), boot = ph(0x0b0b0d);
     const blood = new T.MeshPhongMaterial({ color: 0x2a0707, shininess: 70, specular: 0x552222, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
@@ -271,18 +227,18 @@
     const usb = new T.Mesh(new T.BoxGeometry(0.05, 0.02, 0.15), new T.MeshPhongMaterial({ color: 0x8c98a4, shininess: 90, specular: 0xffffff }));
     usb.position.set(1.12, 0.012, -0.78); usb.rotation.y = 0.5; g.add(usb);
     G.scene.add(g);
-  }
+  };
 
   /* ---------------------------------------------------------------
      POINT D'ENTRÉE : construit tout (appelé une fois par G.boot)
      --------------------------------------------------------------- */
   G.buildWorld = function () {
-    glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']]);
+    glowTex = G.glowTex = radialTexture([[0, 'rgba(255,255,255,0.9)'], [0.25, 'rgba(255,255,255,0.32)'], [1, 'rgba(255,255,255,0)']]);
     G.scene.background = new T.Color(0x161b1e);
     G.scene.fog = new T.FogExp2(0x161b1e, 0.09);
-    G.scene.add(new T.HemisphereLight(0x4d5a63, 0x1a1e20, 0.85));         // ciel gris-bleu en haut, sol sombre en bas
+    G.scene.add(new T.HemisphereLight(0x55626b, 0x1d2224, 0.95));         // ciel gris-bleu en haut, sol sombre en bas
     G.pool = [0, 1, 2].map(() => { const l = new T.PointLight(0xffffff, 0, 10, 2); G.scene.add(l); return l; });
-    buildTower(); buildStreet(); buildBody();
+    buildTower(); G.buildCity();
   };
 
   G.loaded.push('world');

@@ -75,6 +75,22 @@
     };
   }
 
+  // Façade de vieil immeuble parisien : crépi gris-beige sali par la suie, coulures, fissures, pierre à nu par plaques
+  function facadeFn(S) {
+    const f = G.fbm(S), f2 = G.makeNoise(S, 16, 31), f3 = G.makeNoise(S, 8, 57), cr = G.crackSet(S, 6, 90);
+    return (x, y) => {
+      const g = f(x, y); let m = (0.42 + g * 0.95) * (0.9 + G.rnd() * 0.14);
+      if (G.hash2(Math.floor(x / 3), 11) > 0.76) m *= 0.68 + 0.32 * f2(x * 0.2, y);                    // coulures de pluie
+      let r = 138 * m, gg = 132 * m, b = 120 * m;
+      if (f3(x + 30, y + 11) + (f2(x, y) - 0.5) * 0.35 > 0.64) {                                         // crépi tombé : pierre taillée dessous
+        const row = Math.floor(y / 16), xs = (x + (row % 2 ? 16 : 0)) % S, v = G.hash2(Math.floor(xs / 32), row), q = (0.5 + f2(x, y) * 0.7) * m;
+        if (y % 16 === 0 || xs % 32 === 0) { r = 40 * q; gg = 38 * q; b = 34 * q; } else { r = (88 + v * 24) * q; gg = (82 + v * 20) * q; b = (72 + v * 14) * q; }
+      }
+      if (cr.has(y * S + x)) { r *= 0.4; gg *= 0.4; b *= 0.4; }
+      return [r, gg, b];
+    };
+  }
+
   // Neige d'écran cathodique : une petite image dont on redessine le bruit plusieurs fois par seconde
   G.makeStatic = function () {
     const c = document.createElement('canvas'); c.width = 64; c.height = 48;
@@ -99,12 +115,15 @@
     const mk = (fn, o) => new T.MeshPhongMaterial(Object.assign({ map: G.makeTexture(128, fn), vertexColors: true, shininess: 3, specular: 0x111111 }, o || {}));
     G.mat = {
       concrete: mk(concreteFn(128, [1, 1, 1], 1)),
+      facade: mk(facadeFn(128)),                                                  // murs des ruelles
       concreteDark: mk(concreteFn(128, [0.8, 0.82, 0.82], 0.8)),
       wall: mk(paintFn(128)),                                                   // murs intérieurs de l'appartement
       floor: mk(floorFn(128)),
       asphalt: mk(asphaltFn(128), { shininess: 8, specular: 0x101417 }),       // humide mais mat
       metal: mk(metalFn(128), { shininess: 12, specular: 0x222222 }),
       dark: new T.MeshPhongMaterial({ color: 0x08090a, shininess: 2 }),
+      wood: new T.MeshPhongMaterial({ color: 0x4a3f30, shininess: 3 }),
+      puddle: new T.MeshPhongMaterial({ color: 0x030405, shininess: 120, specular: 0x889099, transparent: true, opacity: 0.85, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
       iron: new T.MeshPhongMaterial({ color: 0x15171a, shininess: 20, specular: 0x333333 }),
       cloth: new T.MeshPhongMaterial({ color: 0x4b524a, shininess: 2 }),
       cloth2: new T.MeshPhongMaterial({ color: 0x6d7168, shininess: 2 }),

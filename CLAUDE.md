@@ -47,14 +47,24 @@ Monde ouvert, économie, dealing, cyberespace, implants, combat, histoire détai
 - Commit git à chaque étape qui marche.
 - Choix important (architecture, outil) : proposer 2 options et en recommander une.
 
-## STRUCTURE DU CODE (v3) — à lire en premier
-- `index.html` : **menu** (JOUER / OPTIONS : qualité, sensibilité, volume) + chargeur. Le jeu ne se charge qu'après « JOUER ». Pas de modules ES (double-clic possible).
-- `js/core.js` (G, réglages, aléatoire, bruit) · `js/render.js` (rendu basse résolution + filtre : flou, halo, grain, balayage, vignette) · `js/textures.js` (béton coffré, peinture, asphalte, métal, neige CRT) · `js/world.js` (appartement y=9, escalier 3 étages, hall, rue brutaliste, lampes, corps) · `js/player.js` (marche 2,5 m/s, course 6,4 m/s, caméra qui balance, collisions, marches) · `js/audio.js` (tout généré, change selon intérieur/extérieur) · `js/game.js` (boot, boucle, entrées, interaction E, intro).
+## STRUCTURE DU CODE (v4) — à lire en premier
+- `index.html` : **menu** (JOUER / OPTIONS : qualité, sensibilité, volume, musique, effets) + chargeur. Le jeu ne se charge qu'après « JOUER ». Scripts classiques (pas de modules ES). Ordre des fichiers : **core, render, textures, physics, world, city, player, audio, game** (même liste dans `index.html` ET `build.py`).
+- `js/core.js` (G, réglages, aléatoire, bruit) · `js/render.js` (rendu basse résolution + **SSAO** + flou/halo/grain/vignette ; ni scanlines ni aberration) · `js/textures.js` (béton coffré, peinture, façade, asphalte, métal, neige CRT) · `js/physics.js` (obstacles : boîtes ET segments de mur en biais, grille de cases 8 m, `pushOut/groundAt/ceilingAt/blocked/topAhead`) · `js/world.js` (tour : appartement y=9, escalier 3 étages, hall ; lampes ; corps) · `js/city.js` (la carte : voir ci-dessous) · `js/player.js` (mouvement complet) · `js/audio.js` (lit les fichiers de `audio/`) · `js/game.js` (boot, boucle, entrées, interaction E, intro).
 - Un seul objet global `G` ; chaque fichier y ajoute ses fonctions et ne fait rien avant `G.boot()`.
-- **`python3 build.py`** -> `dist/paris2193.html` (tout en un) et `dist/paris2193.artifact.html` (sans `<!doctype>`, pour la publication Artifact). Publier l'Artifact depuis ce dernier fichier.
-- Éclairage : **3 vraies lumières seulement**, déplacées sur les 3 lampes les plus proches ; les autres lampes sont émissives (ampoule + halo). Saleté « cuite » dans les couleurs de sommets (sombre au sol). Pas de bump map.
-- Tests locaux : Playwright + `three.min.js` r128 (npm) redirigé à la place du CDN ; un pilote automatique appelle `G.updatePlayer(dt)` pour valider l'escalier et les sauts.
-- Lieux/coordonnées : départ (0.1, 9, 0.9) face à la fenêtre (-z). Palier d'étage z 3.3–4.7 ; volée est x 0.1–1.8 (descend vers +z), volée ouest x -1.8–-0.1 (retour vers -z). Sortie hall : porte x -1.6–-0.4 à z=-2.65. Rue vers -z, passerelle ouest à 3,2 m avec trou de 3 m (z -34 à -37, il faut COURIR), blocs à escalader côté est (1/2/3 m), corps vers (-3.2, 0, -21.5).
+- **`python3 build.py`** -> `dist/paris2193.html` (tout en un, image du menu intégrée) et `dist/paris2193.artifact.html` (sans `<!doctype>`, pour l'Artifact) + regénère `audio/manifest.json`. **`jouer.bat` / `python3 serve.py`** = serveur local (nécessaire pour entendre les sons de `audio/`).
+- Éclairage : **3 vraies lumières seulement**, déplacées sur les 3 lampes les plus proches ; les autres lampes sont émissives (ampoule + halo). Saleté « cuite » dans les couleurs de sommets.
+- Tests locaux (Playwright + three r128 npm redirigé) : pilote automatique appelant `G.updatePlayer(dt)` ; vue de dessus en coupant `G.render`.
+
+### La carte (js/city.js)
+- Schéma ASCII d'origine conservé : `docs/carte-v1.txt` et `G.MAP_ASCII`. 1 case = 4 m ; la tour (colonne 6, ligne 25) est à l'origine ; `G.mapWorld(col, ligne)` -> (x, z).
+- **Méthode** : on décrit l'ESPACE LIBRE (ruelles = lignes brisées épaissies `ALLEYS`, place = ellipse `PLACE`, cachettes `ALCOVES`, garage `GARAGE`, zone plate à l'est via `xlim(z)`) par une distance signée `sdf(x,z)` (+ bruit pour l'irrégularité) ; le contour (marching squares, grille 1 m) est extrudé en murs (hauteur 9–15 m, `G.addSegCollider`). Murs en biais, aucun angle droit imposé.
+- Pour modifier la carte : éditer `ALLEYS/PLACE/ALCOVES/GARAGE` et `buildProps()` (props placés avec `G.mapWorld` ou `alleyPoint/side`).
+- Éléments : sortie de la tour -> fourche (égout NO, place avec fontaine au centre, ruelle nord avec grille fermée, ruelle est vers la zone plate, ruelle SE vers le garage, boucle avec cour où est la **clé USB** (E pour la prendre)), corps dans la branche NE, lampadaires sodium faibles le long des ruelles, zone plate (épaves, arbres morts, abribus, lampadaires isolés, clôture), allée est = parcours de parkour (blocs 1,1/2,3/3,5/4,7 m puis passerelle à 5,7 m).
+
+### Mouvement (js/player.js) — touches PHYSIQUES (AZERTY ok)
+Z Q S D · Maj courir · Espace sauter / **franchir** (passement ≤1,3 m, grimpette ≤2,35 m ; en courant le passement est automatique) · **C** s'accroupir / **glisser** (course+C) / **rouler** (C juste avant de toucher le sol) · **F** dash (1 en l'air) · E interagir · M musique (lettre M).
+Modes : move, slide, dash, vault, mantle, wallrun, roll, stun. Saut variable + temps de grâce + saut mémorisé. Course sur mur : en l'air, vite, contre un grand mur ; ~0,9 s puis glissade ; Espace = saut de mur (rechaîne sur un autre mur). Chutes : < 4,5 m ok, > 4,5 m trébuche (0,45 s), > 8 m chute dure (1,2 s) ; roulade annule. Seuils réglables en tête de fichier.
+Piège : les obstacles à franchir doivent être des **boîtes alignées** (les rectangles tournés = segments sans sommet marchable, donc non franchissables).
 
 ## DÉCISIONS PRISES
 - **[CHANGEMENT MAJEUR] Passage de Godot à JavaScript dans le navigateur** : Three.js (r128, cdnjs) + Web Audio, un seul fichier `index.html`. Raison : Godot trop lourd à installer/lancer pour l'utilisateur ; le navigateur donne un résultat direct (lien cliquable), sons et musique générés par code sans fichiers. Claude peut aussi tester avec Chromium/Playwright (captures d'écran). Le code Godot (étapes 1-2) est archivé dans `godot-archive/`. Les décisions « Godot » ci-dessous sont historiques.
@@ -92,10 +102,10 @@ Verdict sur la v2 : « trop lego, plastique, net ». Objectifs :
 - **Ville** : pas une grande rue entourée de buildings. Veut un **embranchement de ruelles pas forcément à angle droit, qui partent dans tous les sens, façon Paris ancien**, + **zones larges SANS bâtiments autour** (hors de la ville, plat, brouillard, on ne voit pas les murs = plus flippant). Pas de génération aléatoire (trop dur). Premier schéma : `docs/carte-v1.txt` (en attente de ses retours). Référence « Urban Alley Pack » : ruelle étroite, grillages, tuyaux, lampes sodium, graffitis, mais trop « lego » : garder la structure, pas le rendu.
 - **Parkour à refaire plus tard** : dash, saut, franchissement simple d'obstacle (passement « chat » de côté, caméra qui tourne façon roulade/torpille), wallrides courts avec glissade si on insiste, chutes si mal fait.
 
-## STATUT v3 (fait)
-Menu + code multi-fichiers ; rendu brouillard/CRT ; béton brut gris ; appartement (lit, bureau, écran CRT, briquet Bic gris à ramasser avec E) ; escalier sans ascenseur ; hall ; rue brutaliste fluide avec parkour ; son par zone ; début calme (titre puis fondu). Retirés : pluie, affiches, pneus, scène de peur (corps conservé, sans déclencheur).
+## STATUT v4 (fait)
+Carte v1 implémentée (ruelles en biais, place, zone plate, garage), occlusion ambiante (SSAO) contre l'aspect « boîtes », textures procédurales (façade/béton/asphalte) — **les textures réelles n'ont pas pu être téléchargées (hôtes bloqués)** : choix = procédural pour l'instant, avec possibilité de déposer des images dans `assets/textures/` plus tard. Mouvement complet (voir plus haut). Début calme, escalier, hall inchangés.
 ## À FAIRE ENSUITE (ordre proposé)
-1. Retours de l'utilisateur sur l'ambiance/perf. 2. **Mains/avant-bras et jambes visibles** (corps réaliste sombre/sale, peau en texture peinte par couches pour chrome/tatouages plus tard). 3. Détails du studio (pod de hacking, écran). 4. Premier ennemi / fuite (backlog 1). 5. Scène de peur refaite plus subtile, plus tard.
+1. Retours de l'utilisateur sur la carte (déplacer/ajouter), le mouvement (réglages à ajuster), la luminosité. 2. **Mains/avant-bras et jambes visibles** (corps réaliste sombre/sale, peau en texture par couches pour chrome/tatouages plus tard). 3. Vrais sons (l'utilisateur les fournit dans `audio/`). 4. Textures réelles CC0 si choisies. 5. Détails du studio (pod de hacking, écran). 6. Garage-hub, parcours sur les toits (`r` du schéma), cachettes `+` utilisables, égout `E`. 7. Premier ennemi / fuite (backlog 1). 8. Scène de peur plus subtile, plus tard.
 
 ## ÉTAPES (historique, version Godot puis web)
 (Version web : prototype complet livré d'un coup — ruelle, brouillard, néons qui grésillent, corps, son 3D, musique générative, scène de peur. À valider par l'utilisateur.)
