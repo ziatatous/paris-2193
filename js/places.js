@@ -93,6 +93,8 @@
     const lampBody = new T.Mesh(new T.CylinderGeometry(0.022, 0.028, 0.05, 8), m); lampBody.rotation.x = Math.PI / 2; lampBody.position.set(0, 0.06, 0.1); rig.head.add(lampBody);
     const beam = new T.Mesh(new T.CylinderGeometry(1.1, 0.03, 8, 14, 1, true), new T.MeshBasicMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.035, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }));
     beam.rotation.x = Math.PI / 2 - 0.5; beam.position.set(0, 0.06, 4.2); rig.head.add(beam); rig.beam = beam;
+    // Halo de la lampe frontale : visible de loin à travers la brume (non atténué par le brouillard) -> on repère un policier AVANT d'être sur lui
+    if (G.glowTex) { const halo = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xdfeaff, blending: T.AdditiveBlending, transparent: true, depthWrite: false, fog: false, opacity: 0.5 })); halo.position.set(0, 0.07, 0.14); halo.scale.set(0.9, 0.9, 1); rig.head.add(halo); }
     for (const sd of [-1, 1]) {
       const sh = pivot(rig.torso, sd * 0.2, 0.55, 0); rod(sh, 0, -0.36, 0.022); dot(sh, 0, 0, 0, 0.03);
       const el = pivot(sh, 0, -0.36, 0); rod(el, 0, -0.34, 0.02); dot(el, 0, -0.35, 0, 0.03);

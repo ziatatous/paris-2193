@@ -19,7 +19,7 @@
   G.boot = async function (canvas, progress) {
     const tick = () => new Promise(r => setTimeout(r, 20));
     canvasEl = canvas;
-    G.loadSettings();
+    G.loadSettings(); if (G.loadSave) G.loadSave();
     progress(0.05, 'Rendu'); G.initRender(canvas); await tick();
     progress(0.2, 'Matières : béton, rouille, asphalte'); G.buildMaterials(); await tick();
     if (G.loadCopModel) { progress(0.3, 'Modèle du policier'); await G.loadCopModel(); }
@@ -65,7 +65,7 @@
       G.keys[e.code] = true;
       if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
       if (e.key && e.key.toLowerCase() === 'm') G.audio.toggleMusic();   // la lettre M, quelle que soit la disposition du clavier
-      if (e.code === 'KeyE' && playing) { if (G.hidden) G.hidden.exit(); else if (G.focus) G.focus.use(); }
+      if (e.code === 'KeyE' && playing && !G.docOpen) { if (G.hidden) G.hidden.exit(); else if (G.focus) G.focus.use(); }
     });
     addEventListener('keyup', e => { G.keys[e.code] = false; });
     addEventListener('blur', () => { for (const k in G.keys) G.keys[k] = false; });
@@ -103,7 +103,7 @@
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = G.clamp((now - last) / 1000, 0, 0.05); last = now; time += dt;   // jamais négatif ni trop grand
-    if (playing) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); updateInteract(); }
+    if (playing && !G.docOpen) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); updateInteract(); }
     G.updateCamera(dt, time);
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);

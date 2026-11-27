@@ -11,7 +11,8 @@
   // --- Réglages du joueur (sauvegardés dans le navigateur si possible) ---
   G.settings = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   G.loadSettings = function () {
-    try { Object.assign(G.settings, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
+    const RANGES = { sens: [0.2, 3], volume: [0, 1], music: [0, 1], fx: [0, 1], chaos: [0, 1] };     // lecture validée : on ne fait jamais confiance au stockage
+    try { const raw = JSON.parse(localStorage.getItem('paris2193') || '{}'); if (raw && typeof raw === 'object') { for (const k in RANGES) if (typeof raw[k] === 'number' && isFinite(raw[k])) G.settings[k] = Math.min(RANGES[k][1], Math.max(RANGES[k][0], raw[k])); if (['low', 'medium', 'high'].includes(raw.quality)) G.settings.quality = raw.quality; } } catch (e) { /* pas grave */ }
   };
   G.saveSettings = function () {
     try { localStorage.setItem('paris2193', JSON.stringify(G.settings)); } catch (e) { /* pas grave */ }

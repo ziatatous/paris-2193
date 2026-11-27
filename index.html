@@ -2,6 +2,7 @@
 <meta charset="utf-8">
 <title>Paris 2193</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' file:; style-src 'unsafe-inline' 'self'; img-src 'self' data: blob: file:; media-src 'self' blob: data: file:; connect-src 'self' blob: data: file:; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <style>
   :root { color-scheme: dark; --bg: #07090a; --fg: #b4bcbc; --dim: #626b6c; --hot: #c9d3cc; --line: #2a3132; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); overflow: hidden; font-family: "Courier New", ui-monospace, monospace; }
@@ -100,7 +101,7 @@
 
 <!-- Three.js : moteur 3D (version fixe, chargée depuis un CDN) -->
 <script>window.G = { loaded: [] };</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/vendor/three.min.js"></script>
 <!--BUNDLE-->
 <script>
 /* =====================================================================
@@ -110,9 +111,11 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'building', 'levels', 'player', 'audio', 'game'];
+  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'building', 'levels', 'story', 'player', 'audio', 'game'];
   const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
-  try { Object.assign(S, JSON.parse(localStorage.getItem('paris2193') || '{}')); } catch (e) { /* pas grave */ }
+  // Lecture validée : seules les clés connues, des nombres bornés, une qualité de la liste (on ne fait jamais confiance à ce qui vient du stockage)
+  const RANGES = { sens: [0.2, 3], volume: [0, 1], music: [0, 1], fx: [0, 1], chaos: [0, 1] };
+  try { const raw = JSON.parse(localStorage.getItem('paris2193') || '{}'); if (raw && typeof raw === 'object') { for (const k in RANGES) if (typeof raw[k] === 'number' && isFinite(raw[k])) S[k] = Math.min(RANGES[k][1], Math.max(RANGES[k][0], raw[k])); if (['low', 'medium', 'high'].includes(raw.quality)) S.quality = raw.quality; } } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };
   const show = id => { for (const p of ['p-main', 'p-opt', 'p-load']) $(p).hidden = p !== id; };
 

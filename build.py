@@ -5,10 +5,14 @@ Usage :  python3 build.py
 """
 import base64, os, re
 from manifest import make_manifest
-FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'building', 'levels', 'player', 'audio', 'game']   # même ordre que dans index.html
+FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'building', 'levels', 'story', 'player', 'audio', 'game']   # même ordre que dans index.html
 html = open('index.html', encoding='utf-8').read()
 bundle = ''.join('<script>\n/* ---- js/%s.js ---- */\n%s\n</script>\n' % (f, open('js/%s.js' % f, encoding='utf-8').read()) for f in FILES)
 assert '<!--BUNDLE-->' in html
+three = open('js/vendor/three.min.js', encoding='utf-8').read()
+THREE_TAG = '<script src="js/vendor/three.min.js"></script>'
+assert THREE_TAG in html
+html = html.replace(THREE_TAG, '<script>\n' + three + '\n</script>')   # three.js intégré : aucune dépendance au réseau
 out_public = html.replace('<!--BUNDLE-->', bundle)       # version publiable (Artifact) : SANS le modèle du policier (licence à vérifier avant de diffuser un modèle tiers)
 if os.path.exists('assets/models/cop.glb'):    # version locale dist/paris2193.html : le modèle est intégré (base64), pas besoin de serveur pour lui
     bundle = '<script>window.COP_GLB_B64="%s";</script>\n' % base64.b64encode(open('assets/models/cop.glb', 'rb').read()).decode() + bundle
