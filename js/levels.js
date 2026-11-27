@@ -253,27 +253,23 @@
     return f;
   }
 
-  G.buildLevel1 = function () {
-    G.have = []; G.objective = G.chapterObjective = 'La clé USB est sur la table de nuit. Prends-la, puis descends.';
-    G.isPlayable = null;                                                                  // filet de la grande carte : inutile ici
-    G.zoneAt = p => (p.x > 3.3 && p.x < 11.7 && p.z > 22.3 && p.z < 29.7) ? 'in' : 'out';
-    G.beginBatch();
-    G.B(-4, 72, -1, 0, -4, 40, M().asphalt, { tile: 3, grime: false });                  // sol
-    G.buildBuilding();
-    // ---- Murs générés à partir du plan : on cherche les « faces » (cases libres collées à un mur), on les regroupe en segments ----
+  // Génère les murs d'une zone à partir d'un plan ASCII. MAP : tableau de chaînes (1 caractère = 1 m, x = colonne, z = ligne).
+  // o.free : caractères « libres » ; o.skip(c,r) : cases-mur à ne pas habiller (bâtiments faits à la main) ; o.special(axis,c,a0,a1) : décor imposé d'une face ; o.covered : caractère du passage couvert.
+  G.genWalls = function (MAP, o) {
+    const FREE = o.free || '.=BLWFcXN', COV = o.covered || '=', cell = (c, r) => (r >= 0 && r < MAP.length && c >= 0 && c < MAP[0].length) ? MAP[r][c] : '#';
     const rowsN = MAP.length, colsN = MAP[0].length, runs = [];
-    const isW = (c, r) => !FREE.includes(cell(c, r)), covered = (c, r) => cell(c, r) === '=';
-    const skipTower = (c, r) => 'TD'.includes(cell(c, r));
+    const isW = (c, r) => !FREE.includes(cell(c, r)), covered = (c, r) => cell(c, r) === COV;
+    const skipTower = (c, r) => o.skip ? o.skip(c, r, cell(c, r)) : false;
     for (const [dir, dc, dr] of [['N', 0, -1], ['S', 0, 1], ['W', -1, 0], ['E', 1, 0]]) {
       const alongX = dir === 'N' || dir === 'S', outer = alongX ? rowsN : colsN, inner = alongX ? colsN : rowsN;
-      for (let o = 0; o < outer; o++) {
+      for (let q = 0; q < outer; q++) {
         let start = -1, cov = false;
         for (let i = 0; i <= inner; i++) {
-          const c = alongX ? i : o, r = alongX ? o : i;
+          const c = alongX ? i : q, r = alongX ? q : i;
           const face = i < inner && FREE.includes(cell(c, r)) && isW(c + dc, r + dr) && !skipTower(c + dc, r + dr);
           if (face && start < 0) { start = i; cov = covered(c, r); }
           if ((!face || (face && covered(c, r) !== cov)) && start >= 0) {
-            runs.push({ dir, o, a0: start, a1: i, cov }); start = face ? i : -1; cov = face ? covered(c, r) : false;
+            runs.push({ dir, o: q, a0: start, a1: i, cov }); start = face ? i : -1; cov = face ? covered(c, r) : false;
           }
         }
       }
@@ -281,11 +277,21 @@
     for (const rn of runs) {
       const L = rn.a1 - rn.a0, axis = (rn.dir === 'N' || rn.dir === 'S') ? 'z' : 'x', open = (rn.dir === 'N' || rn.dir === 'W') ? 1 : -1;
       const c = rn.dir === 'N' || rn.dir === 'W' ? rn.o : rn.o + 1;
-      let special = null;
-      if (axis === 'x' && c === 62 && rn.a0 <= 16 && rn.a1 >= 22) special = [{ type: 'door', a: 19.5 - rn.a0, w: 1.6, h: 2.5, sign: G.dress.SIGNS[8] }];   // la porte du contact
+      const special = o.special ? o.special(axis, c, rn.a0, rn.a1) : null;
       const feats = featsFor(L, rn.cov, special), clear = feats.filter(f => f.type !== 'window').map(f => f.a);
-      facade(axis, c, open, rn.a0, rn.a1, feats.map(f => Object.assign({}, f, { a: rn.a0 + f.a })), { merged: true, clear: clear.map(a => rn.a0 + a), dirt: rn.cov ? 0.3 : 0.5 });
+      facade(axis, c, open, rn.a0, rn.a1, feats.map(f => Object.assign({}, f, { a: rn.a0 + f.a })), { merged: true, clear: clear.map(a => rn.a0 + a), dirt: rn.cov ? 0.3 : (o.dirt || 0.5) });
     }
+  };
+
+  G.buildLevel1 = function () {
+    G.have = []; G.objective = G.chapterObjective = 'La clé USB est sur la table de nuit. Prends-la, puis descends.';
+    G.isPlayable = null;                                                                  // filet de la grande carte : inutile ici
+    G.zoneAt = p => (p.x > 3.3 && p.x < 11.7 && p.z > 22.3 && p.z < 29.7) ? 'in' : 'out';
+    G.beginBatch();
+    G.B(-4, 72, -1, 0, -4, 40, M().asphalt, { tile: 3, grime: false });                  // sol
+    G.buildBuilding();
+    G.genWalls(MAP, { free: FREE, skip: (c, r, ch) => 'TD'.includes(ch),
+      special: (axis, c, a0, a1) => (axis === 'x' && c === 62 && a0 <= 16 && a1 >= 22) ? [{ type: 'door', a: 19.5 - a0, w: 1.6, h: 2.5, sign: G.dress.SIGNS[8] }] : null });   // la porte du contact
     // Plafond du passage couvert (masse pleine au-dessus : on ne voit jamais le ciel) + pincement (ressaut) dans le couloir 3
     G.B(53, 61, 2.7, 14, 19, 21, M().concreteDark, { grime: false, tile: 3 });
     G.B(27, 29.2, 0, 14, 9.45, 10.0, M().concreteDark, { tile: 3 });
@@ -414,5 +420,6 @@
   G.levelComplete = function () { G.completeChapter(G.currentChapter || 1); };
 
   G.facade = facade; G.cable = cable;
+  G.L = { lamp, fireBarrel, crate, barrel, makeHide, clutter, civilian, flushDecals, mesh, block, lowWall, slit, mats, ph };   // briques réutilisées par les autres chapitres
   G.loaded.push('levels');
 })();

@@ -44,6 +44,8 @@
     drone: ac => [(() => { const g = lp(180); return norm(loopFix(mk(ac, 12, t => (Math.sin(TAU * 41 * t) * 0.5 + Math.sin(TAU * 41.7 * t) * 0.5 + Math.sin(TAU * 82.3 * t) * 0.2 * (0.6 + 0.4 * Math.sin(TAU * t / 6))) * 0.5 + g(N()) * 0.12), 1.5), 0.3); })()],
     thud: ac => many(3, () => { const g = lp(400); return norm(mk(ac, 0.5, t => Math.sin(TAU * (50 + 30 * Math.exp(-t * 20)) * t) * env(t, 0.002, 0.14) + g(N()) * env(t, 0.001, 0.07) * 0.7), 0.9); }),
     hit: ac => many(3, () => { const g = lp(900), h = bp(1200, 4000); return norm(mk(ac, 0.5, t => Math.sin(TAU * (70 + 80 * Math.exp(-t * 30)) * t) * env(t, 0.001, 0.1) + g(N()) * env(t, 0.001, 0.09) * 0.9 + h(N()) * env(t, 0.0005, 0.03) * 0.5), 0.95); }),
+    shot: ac => [(() => { const g = lp(2500), l = lp(260), h = bp(900, 6000); let dl = new Float32Array(Math.floor(0.11 * sr)), di = 0; return norm(mk(ac, 1.6, t => { const x = (g(N()) * env(t, 0.0005, 0.04) * 0.9 + h(N()) * env(t, 0.0003, 0.02) * 0.5 + Math.sin(TAU * (60 + 140 * Math.exp(-t * 40)) * t) * env(t, 0.001, 0.12) * 0.9 + l(N()) * env(t, 0.001, 0.35) * 0.4), y = x + dl[di] * 0.5; dl[di] = y; di = (di + 1) % dl.length; return y; }), 0.95); })()],
+    whistle: ac => [(() => { return norm(mk(ac, 0.9, t => Math.sin(TAU * (2300 + 120 * Math.sin(TAU * 38 * t)) * t) * Math.sin(Math.PI * Math.min(1, t / 0.8)) ** 0.5 * 0.4), 0.45); })()],
     pain: ac => [(() => { const b = bp(250, 1600); return norm(mk(ac, 1.3, t => (Math.sin(TAU * (150 + 70 * Math.exp(-t * 3) + 8 * Math.sin(TAU * 7 * t)) * t) * 0.5 + b(N()) * 0.4) * Math.sin(Math.PI * Math.min(1, t / 1.1)) ** 0.7), 0.6); })()]
   };
   // Fabrique tous les dossiers qui n'ont pas de fichier fourni. `have(folder)` dit si l'utilisateur a déposé des fichiers.
