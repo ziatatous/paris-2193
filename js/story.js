@@ -33,6 +33,13 @@
   }
   G.readDoc = function (title, text) { const b = ensureBox(); b.querySelector('#doc-t').textContent = String(title).slice(0, 80); b.querySelector('#doc-b').textContent = String(text).slice(0, 900); b.style.display = 'block'; G.docOpen = true; };
   G.closeDoc = function () { if (box) box.style.display = 'none'; G.docOpen = false; };
+  // JOURNAL (Tab) : objectif, documents trouvés, morts, commandes. Le jeu est en pause pendant la lecture.
+  G.journal = function () {
+    const n = G.save.collect.length, ch = G.chapters[G.currentChapter];
+    G.readDoc('JOURNAL DE DIMA', 'Chapitre ' + G.currentChapter + ' — ' + (ch ? ch.name : '') + '\n\nObjectif : ' + (G.objective || G.chapterObjective || '—') + '\n\nDocuments trouvés : ' + n + '   ·   Morts : ' + G.save.deaths + (G.limp ? '\nTu boites : une blessure qui ne guérit pas.' : '') +
+      '\n\nZ Q S D marcher · Maj courir · Espace sauter / franchir · C s\'accroupir, glisser · F dash\nE interagir (se cacher, lire, ramasser) · Espace en l\'air près d\'une barre : s\'y accrocher\nSe cacher casse la ligne de vue ; l\'ombre et le silence aident. Aucune arme : fuis.');
+  };
+  addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); if (G.docOpen) G.closeDoc(); else if (G.currentChapter && !G.dead && !G.arrest && !G.completed && !G.ended) G.journal(); return; } }, true);
   addEventListener('keydown', e => { if (G.docOpen && (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'Escape')) { e.stopImmediatePropagation(); e.preventDefault(); G.closeDoc(); } }, true);
 
   // Objet à collectionner : on le lit, on le garde (sauvegarde), le jeu est en pause pendant la lecture
