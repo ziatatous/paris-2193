@@ -6,7 +6,7 @@ const { launch } = require('./harness');
   const r = await g.eval(async (process_stop) => {
     const P = G.P, out = { chapters: [] }, sleep = ms => new Promise(r => setTimeout(r, ms));
     const step = n => { for (let i = 0; i < n; i++) { G.updatePlayer(0.03); G.updateCops(0.03); for (const a of G.animated) a.update(0.03); G.updateTriggers(); } };
-    const walk = W => { let wi = 0; G.keys = { KeyW: true, ShiftLeft: true }; for (let t = 0; t < 9000 && wi < W.length; t++) { const [tx, tz] = W[wi], dx = tx - P.pos.x, dz = tz - P.pos.z; P.yaw = Math.atan2(-dx, -dz); G.keys.Space = (t % 50 === 0); step(1); if (Math.hypot(dx, dz) < 0.65) wi++; } G.keys = {}; step(2); walk.last = { wi, of: W.length, x: +P.pos.x.toFixed(1), z: +P.pos.z.toFixed(1), mode: P.mode, hidden: !!G.hidden, stun: +(P.stunT || 0).toFixed(2) }; return wi >= W.length; };
+    const walk = W => { let wi = 0; G.keys = { KeyW: true, ShiftLeft: true }; for (let t = 0; t < 9000 && wi < W.length; t++) { const [tx, tz] = W[wi], dx = tx - P.pos.x, dz = tz - P.pos.z; P.yaw = Math.atan2(-dx, -dz); if (G.currentChapter !== 4) G.keys.Space = (t % 50 === 0); step(1); if (Math.hypot(dx, dz) < 0.65) wi++; } G.keys = {}; step(2); walk.last = { wi, of: W.length, x: +P.pos.x.toFixed(1), z: +P.pos.z.toFixed(1), mode: P.mode, hidden: !!G.hidden, stun: +(P.stunT || 0).toFixed(2) }; return wi >= W.length; };
     const use = id => { const it = G.interactables.find(i => i.id === id); if (!it) return false; it.use(); if (G.docOpen) G.closeDoc(); return true; };
     const waitChapter = async n => { for (let i = 0; i < 80 && G.currentChapter !== n; i++) await sleep(100); await sleep(1500); G.cops.length = 0; return G.currentChapter === n && !G.frozen; };
     const E = -Math.PI / 2;
@@ -27,7 +27,7 @@ const { launch } = require('./harness');
     tp(42.0, 15, 0); jumped = false; let dashed = false; for (let i = 0; i < 400; i++) { step(1); if (!jumped && P.pos.x >= 45.3) { jumped = true; G.keys.Space = true; step(13); G.keys.Space = false; } if (jumped && !dashed && !P.onGround && P.vy < 0.5) { dashed = true; G.keys.KeyF = true; step(1); G.keys.KeyF = false; } if (jumped && P.onGround && i > 40) break; if (P.pos.y < 8) break; } step(3); out.c3d = P.pos.x > 52 && Math.abs(P.pos.y - 15) < 0.2;
     G.keys = {}; use('terminal'); use('sortie'); out.chapters.push(await waitChapter(4));
     // ---- chapitre 4
-    out.c4a = walk([[8, 18.5], [15, 18.5], [18.5, 18.5], [18, 14], [18, 9], [18, 6]]); use('volant'); await sleep(5600); step(10);
+    out.c4a = walk([[8, 18.5], [15, 18.5], [18.5, 18.5], [18, 14], [18, 9], [18, 6]]); use('volant'); await sleep(8600); step(10);
     out.c4b = walk([[18, 12], [18.5, 18.5], [26, 18.5], [33.5, 18.5]]); use('vanne'); step(60); out.c4c = walk([[36, 18.6], [37.4, 18.6]]); G.roman.x = 25; G.roman.z = 18.5; use('vanne'); step(100);
     await sleep(12600); step(10); G.roman.frozenLab = true;
     out.c4d = walk([[40, 18.5], [45, 18.5], [50, 18.5], [54, 18.5], [57.5, 18.5], [59, 20]]); step(30); use('lena'); use('fin_a'); out.ended = G.ended; out.deaths = G.save.deaths; out.collected = G.save.collect.length;
