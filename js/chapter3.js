@@ -53,6 +53,10 @@
     G.L.lamp(-4.8, 11.6, 0, { I: 0.9, dist: 11, halo: 2.4, color: 0xffc070 });
     G.L.lamp(40.2, 17.4, 3.2, { color: 0xff3020, I: 0.9, dist: 12, halo: 2.8, flicker: 0.7 });                 // balise de l'antenne
     G.L.lamp(22.3, 12.4, 4.2, { color: 0xb8c8d8, I: 0.5, dist: 8, halo: 0.9, flicker: 0.4 });          // sur un pylône (hors du trajet du balancement)
+    // ---- La cassette de Roman, posée sur un caisson de ventilation de R1 ----
+    const tape = new T.Mesh(new T.BoxGeometry(0.2, 0.06, 0.12), L().ph(0x2a2418, 6)); tape.position.set(16.5, 10.16, 2.8); G.scene.add(tape);
+    G.interactables.push({ id: 'cassette', pos: new T.Vector3(16.5, 10.3, 2.8), radius: 2.2, prompt: 'Écouter la cassette',
+      use() { G.collect('cassette', 'LA CASSETTE DE ROMAN', '(un grésillement, puis sa voix)\n\n« Dima. Si tu entends ça, c\'est que tu as pris la clé.\nTu te souviens du stade, la nuit où tu as lâché mon bras ?\nMoi, je n\'ai pas lâché. Jamais.\nTu me dois une nuit, frère. Je viens la chercher. »'); } });
     // ---- Terminal du registre (R4) ----
     const term = new T.Group(); term.position.set(61.4, 15, 0); term.rotation.y = -Math.PI / 2; G.scene.add(term);
     const tb = new T.Mesh(new T.BoxGeometry(1.2, 0.8, 0.7), L().ph(0x1c1e1c, 3)); tb.position.y = 0.4; term.add(tb);

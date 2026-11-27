@@ -102,7 +102,7 @@
 
   // --- FINS : écran noir, quelques lignes qui apparaissent une à une, statistiques, retour au menu au clic ---
   const ENDINGS = {
-    a: { title: 'FIN — LA LUMIÈRE', lines: ['Léna branche la clé. Sur toutes les ondes de la ville, une liste de noms se met à défiler.', 'Au matin, les filtres se vident. Les fenêtres s\'allument, une à une.', 'Mila dort sur la banquette arrière. Sa veilleuse est toujours allumée.'] },
+    a: { title: 'FIN — LA LUMIÈRE', lines: ['Léna branche la clé. Sur toutes les ondes de la ville, une liste de noms se met à défiler.', 'Au matin, les filtres se vident. Les fenêtres s\'allument, une à une.', 'Mila dort sur la banquette arrière, un dessin froissé dans la main : une voiture, deux bonshommes, et une fenêtre allumée. Sa veilleuse est toujours allumée.'] },
     b: { title: 'FIN — LE PRIX', lines: ['Tu gardes la clé. Elle ne vaut qu\'une chose : une vie contre une vie.', 'Le moteur au biodiesel tousse. Paris glisse derrière la vitre, sans un bruit.', 'Dans ta poche, la liste. Les autres noms attendent.'] }
   };
   G.showEnding = function (kind) {

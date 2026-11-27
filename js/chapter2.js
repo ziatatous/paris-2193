@@ -115,6 +115,8 @@
         G.later(() => say('Samuel s\'effondre. Quelqu\'un a tiré de la rue. Cours.', 4500), 1500); G.later(() => fx('whistle', 0.6), 2400); G.objective = 'Traverse le marché. Sors par l\'escalier, à l\'est.';
       } };
     G.interactables.push(keyItem);
+    G.interactables.push({ id: 'samuel_note', pos: new T.Vector3(9.0, 0.5, 18.6), radius: 2.3, prompt: 'Fouiller Samuel',
+      use() { if (state.phase < 2) return; G.collect('samuel_note', 'DANS LA POCHE DE SAMUEL', 'Un bout de papier plié en huit, à l\'encre :\n\n« Garage rue du Pont, porte 12. Léna. Mot de passe : \'la lumière allumée\'. »\n\nIl avait tout préparé. Il attendait quelqu\'un comme toi depuis longtemps.'); } });
     G.onReset.push(() => { state.phase = 0; sam.rotation.x = 0; sam.position.set(9.4, 0, 19.0); if (!G.interactables.includes(keyItem)) G.interactables.push(keyItem); G.have = ['usb-chez-nous']; });
 
     // ---- Roman : première apparition au fond de la boucle nord (silhouette immobile, qui disparaît) ----
