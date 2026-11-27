@@ -1,0 +1,28 @@
+# PLAN 24 H — finir le jeu (démarré le 2026-11-27 ~15:30 UTC, fin visée le 2026-11-28 ~15:30 UTC)
+
+Règle d'or (leçon de la pause) : **petites étapes, vérifiées à l'écran (captures en vraie lumière) + tests auto, jamais de gros lot non vérifié.** Chaque étape = commit + republication de l'Artifact + une ligne dans ce fichier. Rien de « bordel » : peu d'éléments, bien placés, circulation libre.
+
+## Définition de « fini » (acceptation)
+- Menu -> 4 chapitres enchaînés -> 2 fins -> écran de fin ; ≈ 35-45 min de jeu.
+- Jamais bloqué : chaque chapitre a un test auto qui parcourt le chemin (bot) et vérifie : pas de plantage, pas de coincement, objectifs atteignables, retour au début OK.
+- Flics fiables : aucun « téléport », aucun coincement (test de simulation 5 min / chapitre), apparition seulement depuis des lieux plausibles.
+- Sauvegarde (chapitre atteint, collectibles, réglages) dans localStorage, validée à la lecture.
+- Sécurité : aucune dépendance réseau au lancement (three.js intégré), CSP, pas d'eval/innerHTML avec données externes, sauvegarde validée.
+- Perf : 60 fps sur PC moyen (tests de budget : dessin <= ~300 appels, mémoire), réglage de qualité.
+- Son : tous les points d'accroche prévus (dossiers audio/), jeu complet même sans fichiers (légendes).
+
+## Jalons (heures depuis le début)
+- [ ] **H0-2 Fondations & triage** : corriger la chambre (lit/porte, câbles), flics (test de simulation), three.js local + CSP, système de sauvegarde, structure « chapitres » (G.chapters), écran de chapitre, objectifs.
+- [ ] **H2-5 Chapitre 1 fini** : appartement sobre (dessins de Mila, mot, 6 collectibles max), escalier gardé, voisin, cour, ruelles ; narration (dictaphone) ; test bot.
+- [ ] **H5-9 Chapitre 2 « Le marché »** : plan ASCII (à ma charge), étals, patrouilles x3, Roman (apparition scriptée), cachettes ; test bot.
+- [ ] **H9-13 Chapitre 3 « Les toits »** : parkour (sauts/murs/barres), drone, flics armés (3 balles, 2 impacts = mort, étourdissement), le registre ; test bot.
+- [ ] **H13-17 Chapitre 4 « Égouts & garage »** : poursuite de Roman, pièce sûre, voiture, 2 fins ; test bot.
+- [ ] **H17-21 Finition** : menu, options, accessibilité, sons (accroches), perf, effets de peur (écran, souffle, cœur), écran de fin/crédits.
+- [ ] **H21-24 Recette** : QA complète, revue sécurité, correction des bugs, publication finale, CLAUDE.md à jour.
+
+## Organisation (agents)
+- Tâche récurrente (toutes les heures, dans cette session) : « lire ce plan, faire le prochain jalon, tester, commiter, publier, cocher ».
+- Sous-agents ponctuels : revue de code / QA / sécurité à la fin de chaque chapitre (jamais d'édition parallèle du même fichier).
+
+## Journal
+- 2026-11-27 15:30 : plan + histoire écrits.
