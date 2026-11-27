@@ -313,7 +313,7 @@
       [15.5, 18.5, 1.0, 0.9, 0.2], [13.2, 17.45, 0.9, 0.9, 0], [21.5, 11.5, 1.0, 0.9, 0.3], [36.5, 8.5, 1.0, 0.9, 0.2], [41.5, 11.5, 1.0, 0.9, 0.4], [45.5, 19.6, 1.0, 0.9, 0], [41.5, 20.4, 0.9, 0.9, 0.3], [24.5, 8.6, 0.9, 0.9, 0.2]]) crate(x, z, s, h, ry);
     barrel(11.4, 15.5); barrel(3.5, 15.6); barrel(12.8, 19.5); barrel(33.4, 9.4);
     // ---- Le corps dans la cour (première peur : on n'est pas seuls) ----
-    G.buildBody(10.7, 19.6, 1.25);
+    G.buildBody(10.7, 19.6, 1.25); trail([[11.0, 16.2], [10.6, 17.5], [10.9, 18.6], [10.7, 19.4]], 0.35);          // on l'a traîné jusqu'ici
     G.interactables.push({ id: 'corps', pos: new T.Vector3(10.4, 0.4, 19.9), radius: 2.0, prompt: 'Examiner le corps',
       use() { G.collect('corps_cour', 'LE CORPS', 'Un homme du quartier. Il tient une clé USB dans la main, comme toi.\nDans sa poche, une liste de prénoms d\'enfants, froissée.\nLa moitié est barrée au crayon.\n\nTu la laisses où elle est. Tes mains tremblent.'); } });
     // ---- Câbles, linge, désordre ----
@@ -420,6 +420,14 @@
   G.levelComplete = function () { G.completeChapter(G.currentChapter || 1); };
 
   G.facade = facade; G.cable = cable;
-  G.L = { lamp, fireBarrel, crate, barrel, makeHide, clutter, civilian, flushDecals, mesh, block, lowWall, slit, mats, ph };   // briques réutilisées par les autres chapitres
+  // Traînée de sang : des flaques et des gouttes le long d'un chemin (un corps traîné)
+  function trail(pts, width) {
+    const D = G.dress, pool = [], drop = [];
+    for (let i = 0; i < pts.length - 1; i++) { const [x0, z0] = pts[i], [x1, z1] = pts[i + 1], n = Math.max(1, Math.floor(Math.hypot(x1 - x0, z1 - z0) / 0.55));
+      for (let k = 0; k < n; k++) { const t = k / n, x = x0 + (x1 - x0) * t + (G.rnd() - 0.5) * (width || 0.3), z = z0 + (z1 - z0) * t + (G.rnd() - 0.5) * (width || 0.3), a = Math.atan2(z1 - z0, x1 - x0);
+        pool.push(D.ground(x, z, a, 0.5 + G.rnd() * 0.5, 0.35 + G.rnd() * 0.3)); if (G.rnd() < 0.6) drop.push(D.ground(x + (G.rnd() - 0.5) * 0.8, z + (G.rnd() - 0.5) * 0.8, G.rnd() * 6, 0.12 + G.rnd() * 0.18, 0.1 + G.rnd() * 0.15)); } }
+    D.decals(D.TEX.bloodpool(), pool, { shininess: 40, specular: 0x441111, polygonOffsetFactor: -3 }); D.decals(D.TEX.drop(), drop, { shininess: 40, specular: 0x441111, polygonOffsetFactor: -3 });
+  }
+  G.L = { trail, lamp, fireBarrel, crate, barrel, makeHide, clutter, civilian, flushDecals, mesh, block, lowWall, slit, mats, ph };   // briques réutilisées par les autres chapitres
   G.loaded.push('levels');
 })();

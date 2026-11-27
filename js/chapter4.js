@@ -84,7 +84,7 @@
     G.L.crate(24, 19.0, 1.0, 0.9, 0.2); G.L.crate(30.5, 18.9, 1.0, 0.9, 0.4); G.L.crate(41.5, 19.0, 1.0, 0.9, 0.1); G.L.crate(15, 19.0, 0.9, 0.9, 0);
 
     // ---- Salle de la vanne : le volant à prendre, un corps (un technicien), du sang ----
-    G.buildBody(16.2, 5.9, 0.4);
+    G.buildBody(16.2, 5.9, 0.4); G.L.trail([[17.6, 17.0], [17.7, 14.0], [17.4, 11.0], [17.5, 8.5], [16.6, 6.4]], 0.4); G.L.trail([[19.0, 5.2], [19.4, 5.7]], 0.2);          // traîné depuis le carrefour
     G.interactables.push({ id: 'corps4', pos: new T.Vector3(16.2, 0.4, 5.9), radius: 2.0, prompt: 'Examiner le corps',
       use() { G.collect('technicien', 'LE TECHNICIEN', 'Une combinaison de la voirie. Sur le badge : « LOT 14 — ENTRETIEN ».\nLe volant de la vanne est resté dans sa main, serré si fort qu\'il a fallu le lui arracher.\nQuelqu\'un l\'a traîné jusqu\'ici. Quelqu\'un qui n\'avait pas peur de salir.'); } });
     const wheel = new T.Mesh(new T.TorusGeometry(0.22, 0.03, 6, 16), L().ph(0x4a2a1c, 20)); wheel.position.set(19.3, 0.36, 5.6); wheel.rotation.x = Math.PI / 2; G.scene.add(wheel);

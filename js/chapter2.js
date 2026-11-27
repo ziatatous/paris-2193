@@ -110,7 +110,7 @@
     const keyItem = { id: 'key_terminal', pos: new T.Vector3(9.4, 0.95, 17.9), radius: 2.2, prompt: 'Reprendre la clé',
       use() {
         G.interactables = G.interactables.filter(i => i !== keyItem); state.phase = 1; G.say('', 1);
-        fx('whistle', 0.8); setTimeout(() => { fx('shot', 1); sam.rotation.x = -Math.PI / 2; sam.position.set(9.0, 0.22, 18.6); fx('pain', 0.6); state.phase = 2; }, 900);
+        fx('whistle', 0.8); setTimeout(() => { fx('shot', 1); sam.rotation.x = -Math.PI / 2; sam.position.set(9.0, 0.22, 18.6); fx('pain', 0.6); state.phase = 2; G.L.trail([[9.0, 18.4], [9.4, 18.9], [9.1, 19.4]], 0.25); }, 900);
         setTimeout(() => say('Samuel s\'effondre. Quelqu\'un a tiré de la rue. Cours.', 4500), 1500); setTimeout(() => fx('whistle', 0.6), 2400); G.objective = 'Traverse le marché. Sors par l\'escalier, à l\'est.';
       } };
     G.interactables.push(keyItem);
