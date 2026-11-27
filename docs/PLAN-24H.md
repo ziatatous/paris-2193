@@ -11,13 +11,19 @@ Règle d'or (leçon de la pause) : **petites étapes, vérifiées à l'écran (c
 - Perf : 60 fps sur PC moyen (tests de budget : dessin <= ~300 appels, mémoire), réglage de qualité.
 - Son : tous les points d'accroche prévus (dossiers audio/), jeu complet même sans fichiers (légendes).
 
+## Décisions de l'utilisateur (réponses aux questions de reprise)
+- **Son** : je crée les FX (pas, respiration, cœur, portes, ambiance, sirènes...) **par code (Web Audio)** ; l'utilisateur fournira la MUSIQUE (dossier audio/music/). Ses fichiers FX éventuels remplacent les miens.
+- **Mort / arrestation** : **retour au début du CHAPITRE** (instantané, histoire et objets trouvés conservés).
+- **Violence** : **viscérale, réaliste, façon Outlast 2**.
+- **Combat** : **aucune arme pour le joueur, jamais.** Fuite, cachettes, esquive, parkour. Les flics armés tirent (3 balles, 2 impacts = mort).
+
 ## Jalons (heures depuis le début)
 - [~] **H0-2 Fondations & triage** (fait : three.js local, CSP, sauvegarde validée + test, chambre refaite sobre avec Mila/dessins/mots/veilleuse, halo de lampe des flics, banc d'essai tests/ ; reste : écran de chapitre/G.chapters, bot de parcours, test des flics) : corriger la chambre (lit/porte, câbles), flics (test de simulation), three.js local + CSP, système de sauvegarde, structure « chapitres » (G.chapters), écran de chapitre, objectifs.
 - [ ] **H2-5 Chapitre 1 fini** : appartement sobre (dessins de Mila, mot, 6 collectibles max), escalier gardé, voisin, cour, ruelles ; narration (dictaphone) ; test bot.
 - [ ] **H5-9 Chapitre 2 « Le marché »** : plan ASCII (à ma charge), étals, patrouilles x3, Roman (apparition scriptée), cachettes ; test bot.
 - [ ] **H9-13 Chapitre 3 « Les toits »** : parkour (sauts/murs/barres), drone, flics armés (3 balles, 2 impacts = mort, étourdissement), le registre ; test bot.
 - [ ] **H13-17 Chapitre 4 « Égouts & garage »** : poursuite de Roman, pièce sûre, voiture, 2 fins ; test bot.
-- [ ] **H17-21 Finition** : menu, options, accessibilité, sons (accroches), perf, effets de peur (écran, souffle, cœur), écran de fin/crédits.
+- [ ] **H17-21 Finition** : menu, options, accessibilité, **FX sonores générés par code (moteur Web Audio, à commencer dès que possible : peur = son)**, perf, effets de peur (écran, souffle, cœur), écran de fin/crédits.
 - [ ] **H21-24 Recette** : QA complète, revue sécurité, correction des bugs, publication finale, CLAUDE.md à jour.
 
 ## Organisation (agents)
