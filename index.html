@@ -71,10 +71,11 @@
   <canvas id="grain" width="160" height="90"></canvas>
   <div class="panel" id="p-main">
     <h1>PARIS 2193</h1>
-    <p class="sub">PROTOTYPE &nbsp;·&nbsp; v3</p>
+    <p class="sub">UNE HISTOIRE EN 4 CHAPITRES</p>
     <button id="b-play">JOUER</button>
-    <button id="b-sandbox">GRANDE CARTE (ancienne)</button>
-    <button id="b-lab">LABO POLICIER (test)</button>
+    <button id="b-new" hidden>NOUVELLE PARTIE</button>
+    <button id="b-sandbox" class="dev" hidden>GRANDE CARTE (ancienne)</button>
+    <button id="b-lab" class="dev" hidden>LABO POLICIER (test)</button>
     <button id="b-opt">OPTIONS</button>
   </div>
   <div class="panel" id="p-opt" hidden>
@@ -93,7 +94,7 @@
     <h1 style="font-size:1.6rem">CHARGEMENT</h1>
     <div id="bar"><i></i></div><div id="loadmsg">&nbsp;</div>
   </div>
-  <div id="ver">v3 &nbsp;·&nbsp; casque recommandé</div>
+  <div id="ver">v1.0 &nbsp;·&nbsp; casque recommandé &nbsp;·&nbsp; Z Q S D · Maj · Espace · C · F · E</div>
 </div>
 <div id="enter" hidden>
   <div id="enter-text">PARIS 2193</div><div id="enter-sub">cliquer pour entrer</div>
@@ -111,7 +112,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'health', 'building', 'levels', 'story', 'chapter2', 'chapter3', 'player', 'parkour2', 'sfx', 'audio', 'game'];
+  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'health', 'building', 'levels', 'story', 'chapter2', 'chapter3', 'chapter4', 'player', 'parkour2', 'sfx', 'audio', 'game'];
   const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   // Lecture validée : seules les clés connues, des nombres bornés, une qualité de la liste (on ne fait jamais confiance à ce qui vient du stockage)
   const RANGES = { sens: [0.2, 3], volume: [0, 1], music: [0, 1], fx: [0, 1], chaos: [0, 1] };
@@ -156,6 +157,12 @@
       busy = false; $('loadmsg').textContent = 'Erreur : ' + err.message + ' (ouvre la console F12 pour le détail)'; console.error(err);
     }
   }
+  // Sauvegarde : si une partie existe, JOUER reprend au dernier chapitre et NOUVELLE PARTIE efface (lecture validée, jamais de confiance au stockage)
+  let savedChapter = 1, hasProgress = false;
+  try { const raw = JSON.parse(localStorage.getItem('paris2193.save') || 'null'); if (raw && typeof raw === 'object') { const c = Number(raw.chapter); if (Number.isInteger(c) && c >= 1 && c <= 4) savedChapter = c; hasProgress = savedChapter > 1 || (Array.isArray(raw.collect) && raw.collect.length > 0); } } catch (e) { /* ignoré */ }
+  if (hasProgress) { $('b-play').textContent = 'CONTINUER — CHAPITRE ' + savedChapter; $('b-new').hidden = false; }
+  if (location.hash === '#dev') for (const b of document.querySelectorAll('.dev')) b.hidden = false;   // outils de développement (labo, grande carte) : cachés au joueur
+  $('b-new').addEventListener('click', () => { try { localStorage.removeItem('paris2193.save'); } catch (e) { /* ignoré */ } launch('level'); });
   $('b-play').addEventListener('click', () => launch('level'));
   $('b-sandbox').addEventListener('click', () => launch('sandbox'));
   $('b-lab').addEventListener('click', () => launch('lab'));

@@ -64,7 +64,7 @@
     const rig = g.userData.rig, black = L().ph(0x050606, 6), beak = new T.Mesh(new T.ConeGeometry(0.05, 0.22, 8), black); beak.rotation.x = Math.PI / 2; beak.position.set(0, -0.02, 0.2); rig.head.add(beak);
     const hood = new T.Mesh(new T.SphereGeometry(0.125, 10, 8), black); hood.position.set(0, 0.03, -0.01); hood.scale.set(1, 1.05, 1.05); rig.head.add(hood);
     const bat = new T.Mesh(new T.CylinderGeometry(0.035, 0.05, 0.9, 7), L().ph(0x1c1410, 4)); bat.position.set(0, -0.45, 0.1); bat.rotation.x = 0.4; rig.el1.add(bat);
-    rig.beam.visible = false; g.userData.roman = true; return g;
+    rig.beam.visible = false; g.traverse(o => { if (o.isSprite) o.visible = false; }); g.userData.roman = true; return g;
   }
   G.makeRoman = roman;
 

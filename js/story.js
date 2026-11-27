@@ -84,5 +84,24 @@
     if (G.chapters[n + 1]) { G.save.chapter = n + 1; G.writeSave(); setTimeout(() => { G.completed = false; G.loadChapter(n + 1); }, 1500); }
     else setTimeout(() => { if (G.endLevelScreen) G.endLevelScreen('À SUIVRE', 'la suite arrive · cliquer pour rejouer le chapitre'); }, 1500);
   };
+
+  // --- FINS : écran noir, quelques lignes qui apparaissent une à une, statistiques, retour au menu au clic ---
+  const ENDINGS = {
+    a: { title: 'FIN — LA LUMIÈRE', lines: ['Léna branche la clé. Sur toutes les ondes de la ville, une liste de noms se met à défiler.', 'Au matin, les filtres se vident. Les fenêtres s\'allument, une à une.', 'Mila dort sur la banquette arrière. Sa veilleuse est toujours allumée.'] },
+    b: { title: 'FIN — LE PRIX', lines: ['Tu gardes la clé. Elle ne vaut qu\'une chose : une vie contre une vie.', 'Le moteur au biodiesel tousse. Paris glisse derrière la vitre, sans un bruit.', 'Dans ta poche, la liste. Les autres noms attendent.'] }
+  };
+  G.showEnding = function (kind) {
+    const E = ENDINGS[kind]; if (!E || G.ended) return; G.ended = true; G.frozen = true; G.flag('ending_' + kind, true);
+    const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;background:#000;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;color:#b4bcbc;font:1rem/1.7 "Courier New",monospace;text-align:center;padding:2rem;opacity:0;transition:opacity 2s';
+    document.body.appendChild(d); requestAnimationFrame(() => { d.style.opacity = 1; });
+    const add = (txt, delay, css) => setTimeout(() => { const p = document.createElement('div'); p.textContent = txt; p.style.cssText = 'max-width:34rem;opacity:0;transition:opacity 1.8s;' + (css || ''); d.appendChild(p); requestAnimationFrame(() => { p.style.opacity = 1; }); }, delay);
+    E.lines.forEach((t, i) => add(t, 2500 + i * 4200));
+    const t1 = 2500 + E.lines.length * 4200;
+    add(E.title, t1 + 800, 'letter-spacing:.4em;color:#c9d3cc;font-size:1.3rem;margin-top:1.5rem');
+    const found = G.save.collect.length;
+    add('Documents trouvés : ' + found + '   ·   Morts : ' + G.save.deaths, t1 + 3000, 'color:#626b6c;font-size:.8rem');
+    add('[ cliquer pour revenir au menu ]', t1 + 5000, 'color:#626b6c;font-size:.8rem;cursor:pointer');
+    setTimeout(() => { d.style.cursor = 'pointer'; d.addEventListener('click', () => { G.save.chapter = 1; G.writeSave(); location.reload(); }); }, t1 + 5000);
+  };
   G.loaded.push('story');
 })();

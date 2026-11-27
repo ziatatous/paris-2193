@@ -9,7 +9,7 @@ exports.launch = async function (o) {
   const errors = [];
   page.on('pageerror', e => errors.push('page: ' + e.message.slice(0, 300)));
   page.on('console', m => { if (m.type() === 'error' && !/favicon|cop\.glb/.test(m.text())) errors.push('console: ' + m.text().slice(0, 300)); });
-  await page.goto('file://' + path.resolve(__dirname, '..', o.file || 'dist/paris2193.html'));
+  await page.goto('file://' + path.resolve(__dirname, '..', o.file || 'dist/paris2193.html') + '#dev');
   const btn = { play: '#b-play', lab: '#b-lab', sandbox: '#b-sandbox' }[o.mode || 'play'];
   await page.click(btn);
   await page.waitForSelector('#enter:not([hidden])', { timeout: o.timeout || 240000 });
