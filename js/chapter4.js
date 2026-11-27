@@ -92,7 +92,7 @@
       use() {
         wheel.visible = false; G.interactables = G.interactables.filter(i => i !== wheelItem); R.wheel = true; R.phase = 1; G.have.push('volant');
         G.objective = 'Retourne à la grille et ouvre la vanne. Quelque chose te suit.'; say('Un volant de vanne. Derrière toi, quelque chose heurte un tuyau.', 4500); fx('stinger', 0.8); fx('creak', 0.6);
-        G.later(() => { if (R.phase === 1 && G.currentChapter === 4) spawnRoman(); }, 5000);
+        G.later(() => { if (R.phase === 1 && G.currentChapter === 4) spawnRoman(); }, 8000);
       } };
     G.interactables.push(wheelItem);
 
