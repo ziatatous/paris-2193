@@ -92,7 +92,7 @@
       use() {
         wheel.visible = false; G.interactables = G.interactables.filter(i => i !== wheelItem); R.wheel = true; R.phase = 1; G.have.push('volant');
         G.objective = 'Retourne à la grille et ouvre la vanne. Quelque chose te suit.'; say('Un volant de vanne. Derrière toi, quelque chose heurte un tuyau.', 4500); fx('stinger', 0.8); fx('creak', 0.6);
-        setTimeout(() => { if (R.phase === 1 && G.currentChapter === 4) spawnRoman(); }, 5000);
+        G.later(() => { if (R.phase === 1 && G.currentChapter === 4) spawnRoman(); }, 5000);
       } };
     G.interactables.push(wheelItem);
 
@@ -109,12 +109,12 @@
       use() {
         if (!R.wheel) { say('Une vanne sans volant. Il en faut un.', 2500); return; }
         valveWheel.visible = true;
-        if (!R.gateOpen) { R.gateOpen = true; gst.target = 1; gateCol.minY = 99; gateCol.maxY = 100; fx('door', 0.9); fx('creak', 0.8); setTimeout(rebuildNav, 1200); G.objective = 'La grille s\'ouvre. Passe. Tu peux la refermer derrière toi.'; say('La grille remonte en grinçant.', 3000); valve.prompt = 'Refermer la grille'; }
+        if (!R.gateOpen) { R.gateOpen = true; gst.target = 1; gateCol.minY = 99; gateCol.maxY = 100; fx('door', 0.9); fx('creak', 0.8); G.later(rebuildNav, 1200); G.objective = 'La grille s\'ouvre. Passe. Tu peux la refermer derrière toi.'; say('La grille remonte en grinçant.', 3000); valve.prompt = 'Refermer la grille'; }
         else if (!R.gateClosed) {
           const rc = R.cop; if (rc && R.active && Math.hypot(rc.x - 35.2, rc.z - 19) < 2.2) { say('Il est trop près. Impossible de la refermer.', 2500); return; }
           if (P().pos.x < 36.5) { say('Il faut être de l\'autre côté.', 2200); return; }
-          R.gateClosed = true; gst.target = 0; gateCol.minY = 0; gateCol.maxY = 2.7; fx('door', 1); setTimeout(rebuildNav, 3000); valve.prompt = '…'; say('La grille se referme. Tiens bon.', 3000); G.objective = 'Il va chercher un autre chemin. Rejoins le garage.';
-          setTimeout(() => ventScare(), 12000);
+          R.gateClosed = true; gst.target = 0; gateCol.minY = 0; gateCol.maxY = 2.7; fx('door', 1); G.later(rebuildNav, 3000); valve.prompt = '…'; say('La grille se referme. Tiens bon.', 3000); G.objective = 'Il va chercher un autre chemin. Rejoins le garage.';
+          G.later(() => ventScare(), 12000);
         }
       } };
     G.interactables.push(valve);
@@ -142,9 +142,9 @@
     const dst = { y: 4.5, target: 4.5 }; let doorCol = null;
     G.animated.push({ update(dt) { if (Math.abs(dst.y - dst.target) > 0.001) { dst.y += Math.sign(dst.target - dst.y) * Math.min(Math.abs(dst.target - dst.y), dt * 2.4); door.position.y = dst.y; } } });
     const trSafe = G.addTrigger(p => p.pos.x > 56.2 && p.pos.x < 62.5 && p.pos.z > 15.5 && p.pos.z < 22.5, () => {
-      R.safe = true; dst.target = 1.5; doorCol = G.addBoxCollider(55.0, 55.3, 0, 3.0, 18, 20); fx('door', 1); setTimeout(() => fx('thud', 1), 500); setTimeout(() => fx('thud', 0.9), 1300); setTimeout(() => fx('thud', 0.7), 2400);
+      R.safe = true; dst.target = 1.5; doorCol = G.addBoxCollider(55.0, 55.3, 0, 3.0, 18, 20); fx('door', 1); G.later(() => fx('thud', 1), 500); G.later(() => fx('thud', 0.9), 1300); G.later(() => fx('thud', 0.7), 2400);
       if (R.cop) R.cop.frozenLab = true; G.objective = 'La porte s\'est refermée. Léna est là.'; say('Derrière la porte, quelqu\'un cogne. Puis plus rien. Tu es en sécurité.', 5000);
-      setTimeout(() => say('LÉNA : « Dima. On t\'attendait. Elle va bien. Elle est dans la voiture. »', 5500), 5500);
+      G.later(() => say('LÉNA : « Dima. On t\'attendait. Elle va bien. Elle est dans la voiture. »', 5500), 5500);
     });
     trSafe.reset = () => { R.safe = false; dst.target = dst.y = 4.5; door.position.y = 4.5; if (doorCol) { doorCol.minY = 99; doorCol.maxY = 100; } };
     // voiture au biodiesel : carcasse sombre, phares

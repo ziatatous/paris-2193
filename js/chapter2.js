@@ -106,12 +106,13 @@
     const sam = G.L.civilian(); sam.position.set(9.4, 0, 19.0); sam.rotation.y = Math.PI; G.scene.add(sam);           // au sud du terminal, tourné vers lui
     const state = { phase: 0 };
     const lines = [[1500, 'SAMUEL : « Dima… C\'est quoi, ça ? Où t\'as eu cette clé ? »'], [5200, 'SAMUEL : « Ce n\'est pas une dette. Ce sont des noms. Des gamins. »'], [9200, 'SAMUEL : « Reprends-la. Va au garage de la rue du Pont. Cherche Léna. Passe par le marché, pas par la rue. »']];
-    for (const [t, txt] of lines) setTimeout(() => { if (G.currentChapter === 2 && state.phase === 0 && !G.completed) say(txt, 3800); }, t);
+    const opening = () => { for (const [t, txt] of lines) G.later(() => { if (G.currentChapter === 2 && state.phase === 0 && !G.completed) say(txt, 3800); }, t); };
+    opening(); G.onReset.push(opening);
     const keyItem = { id: 'key_terminal', pos: new T.Vector3(9.4, 0.95, 17.9), radius: 2.2, prompt: 'Reprendre la clé',
       use() {
         G.interactables = G.interactables.filter(i => i !== keyItem); state.phase = 1; G.say('', 1);
-        fx('whistle', 0.8); setTimeout(() => { fx('shot', 1); sam.rotation.x = -Math.PI / 2; sam.position.set(9.0, 0.22, 18.6); fx('pain', 0.6); state.phase = 2; G.L.trail([[9.0, 18.4], [9.4, 18.9], [9.1, 19.4]], 0.25); }, 900);
-        setTimeout(() => say('Samuel s\'effondre. Quelqu\'un a tiré de la rue. Cours.', 4500), 1500); setTimeout(() => fx('whistle', 0.6), 2400); G.objective = 'Traverse le marché. Sors par l\'escalier, à l\'est.';
+        fx('whistle', 0.8); G.later(() => { fx('shot', 1); sam.rotation.x = -Math.PI / 2; sam.position.set(9.0, 0.22, 18.6); fx('pain', 0.6); state.phase = 2; G.L.trail([[9.0, 18.4], [9.4, 18.9], [9.1, 19.4]], 0.25); }, 900);
+        G.later(() => say('Samuel s\'effondre. Quelqu\'un a tiré de la rue. Cours.', 4500), 1500); G.later(() => fx('whistle', 0.6), 2400); G.objective = 'Traverse le marché. Sors par l\'escalier, à l\'est.';
       } };
     G.interactables.push(keyItem);
     G.onReset.push(() => { state.phase = 0; sam.rotation.x = 0; sam.position.set(9.4, 0, 19.0); if (!G.interactables.includes(keyItem)) G.interactables.push(keyItem); G.have = ['usb-chez-nous']; });
@@ -120,7 +121,7 @@
     const rm = roman(); rm.position.set(46.2, 0, 7.5); rm.rotation.y = -Math.PI / 2; rm.visible = false; G.scene.add(rm);
     const tr = G.addTrigger(p => p.pos.z < 11.5 && p.pos.x > 34.5 && p.pos.x < 37 && p.pos.y < 2, () => {
       rm.visible = true; fx('creak', 0.9); fx('stinger', 0.6); say('Au bout du couloir, quelqu\'un te regarde.', 3000);
-      setTimeout(() => { rm.visible = false; fx('door', 0.6); }, 4200);
+      G.later(() => { rm.visible = false; fx('door', 0.6); }, 4200);
     });
     tr.reset = () => { rm.visible = false; };
     // ---- Sortie : la porte de l'escalier (ch. 3 : les toits) ----

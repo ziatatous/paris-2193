@@ -66,7 +66,7 @@
       G.keys[e.code] = true;
       if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
       if (e.key && e.key.toLowerCase() === 'm') G.audio.toggleMusic();   // la lettre M, quelle que soit la disposition du clavier
-      if (e.code === 'KeyE' && playing && !G.docOpen) { if (G.hidden) G.hidden.exit(); else if (G.focus) G.focus.use(); }
+      if (e.code === 'KeyE' && playing && !G.docOpen && !e.repeat && !G.dead && !G.completed && !G.arrest && !(G.frozen && !G.hidden)) { if (G.hidden) G.hidden.exit(); else if (G.focus) G.focus.use(); }
     });
     addEventListener('keyup', e => { G.keys[e.code] = false; });
     addEventListener('blur', () => { for (const k in G.keys) G.keys[k] = false; });

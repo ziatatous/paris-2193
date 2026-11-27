@@ -58,8 +58,8 @@
       const lines = [[0, '…Dima ?'], [2600, '« Tu sors à cette heure-ci… Va. Je veille sur Mila. »'], [6800, '« Mais reviens avant la nuit. Pour elle. »']];
       const trig = G.addTrigger(p => Math.abs(p.pos.y - yf) < 1.6 && p.pos.x > 3.3 && p.pos.x < 6.9 && p.pos.z > Z0 + WT && p.pos.z < 25.9, () => {
         st.target = 1; const f = G.audio && G.audio.fx; if (f) f('door', 0.7);
-        for (const [t, txt] of lines) setTimeout(() => { if (st.target > 0) G.say(txt, 2800); }, t);
-        setTimeout(() => { st.target = 0; const f2 = G.audio && G.audio.fx; if (f2) f2('door', 0.5); }, 10500);
+        for (const [t, txt] of lines) G.later(() => { if (st.target > 0) G.say(txt, 2800); }, t);
+        G.later(() => { st.target = 0; const f2 = G.audio && G.audio.fx; if (f2) f2('door', 0.5); }, 10500);
       });
       trig.reset = () => { st.target = 0; st.open = 0; };
     }

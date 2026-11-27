@@ -66,7 +66,7 @@
         if (!G.have.includes('usb-chez-nous')) { say('Il me faut la clé.', 2000); return; }
         st.read = true; G.flag('registre', true); G.objective = 'Descends par l\'échelle de service (sud). Il faut trouver Léna, au garage.';
         G.collect('registre', 'REGISTRE — LOT 14', 'FILTRATION PULMONAIRE · SUJETS PRÉLEVÉS · PÉRIODE 2193-Q4\n\n 0412  A. Petrova, 8 ans .......... affecté\n 0413  T. Idris, 10 ans ........... affecté\n 0414  M. OKAFOR-LENOIR, 9 ans .... ASSIGNÉE · asthme : sujet idéal\n\nPrélèvement prévu : cette nuit.\n\nTu relis la ligne trois. Tu la relis encore.');
-        setTimeout(() => say('Cette nuit. Mila.', 4500), 400);
+        G.later(() => say('Cette nuit. Mila.', 4500), 400);
       } });
     // Sortie : échelle de service au bord sud de R4 ; ici on la montre comme une trappe qui descend
     G.interactables.push({ id: 'sortie', pos: new T.Vector3(57, 15.6, 4.3), radius: 2.3, prompt: 'Descendre l\'échelle de service',
@@ -74,7 +74,7 @@
     G.onReset.push(() => { st.read = false; G.have = ['usb-chez-nous']; });
 
     // ---- Policiers ARMÉS (restent sur leur toit : « leash ») + drone ----
-    const armed = (home, facing, patrol, roof) => { const c = G.addCop(G.makeCop(), home, facing, patrol); c.armed = true; c.y = roof[4]; const r = roof; c.leash = { x0: r[0] + 0.6, x1: r[1] - 0.6, z0: r[2] + 0.6, z1: r[3] - 0.6 }; return c; };
+    const armed = (home, facing, patrol, roof) => { const c = G.addCop(G.makeCop(), home, facing, patrol); c.armed = true; c.y = c.homeY = roof[4]; const r = roof; c.leash = { x0: r[0] + 0.6, x1: r[1] - 0.6, z0: r[2] + 0.6, z1: r[3] - 0.6 }; return c; };
     armed([33, 0], Math.PI, [[33, -2.5], [29, -2.5], [29, 2.5], [33, 2.5]], ROOFS.R2);
     armed([59.5, -3], Math.PI, [[56, -3], [59.5, -3], [59.5, 3.5], [56, 3.5]], ROOFS.R4);
     // grille de navigation faite à la main : seules les cases SUR un toit sont libres

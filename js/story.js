@@ -55,7 +55,10 @@
   G.chapters = {
     1: { name: 'Chez nous', build() { G.buildLevel1(); } }
   };
-  G.currentChapter = 0;
+  G.currentChapter = 0; G.epoch = 0;
+  // Minuteur lié au chapitre : annulé si on change de chapitre ou si on recommence (mort/arrestation)
+  G.later = function (fn, ms) { const e = G.epoch; return setTimeout(() => { if (e === G.epoch) fn(); }, ms); };
+  G.cleanPlayerState = function () { const P = G.P; if (P) { P.animRoll = P.animPitch = P.animDip = P.kickP = P.kickR = 0; } const s = document.getElementById('slit'); if (s) s.style.display = 'none'; if (G.closeDoc) G.closeDoc(); };
   // Déclencheurs d'événements (scènes scriptées) : test(P) vrai -> fire() une seule fois ; réarmés quand on recommence le chapitre
   G.triggers = [];
   G.addTrigger = function (test, fire) { const t = { test, fire, done: false }; G.triggers.push(t); G.onReset.push(() => { t.done = false; if (t.reset) t.reset(); }); return t; };
@@ -69,7 +72,7 @@
     });
     for (const c of sc.children.slice()) sc.remove(c);
     G.lamps.length = 0; G.interactables.length = 0; G.animated.length = 0; G.onReset.length = 0; if (G.hides) G.hides.length = 0; if (G.cops) G.cops.length = 0; if (G.triggers) G.triggers.length = 0;
-    if (G.clearParkour) G.clearParkour(); G.killY = undefined; G.fogOverride = undefined; G.drone = null; G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
+    if (G.clearParkour) G.clearParkour(); G.epoch++; G.cleanPlayerState(); G.dead = false; G.killY = undefined; G.fogOverride = undefined; G.drone = null; G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
   };
   G.buildChapter = function (n) { G.buildBase(); G.chapters[n].build(); G.currentChapter = n; G.limp = G.flag('wounded'); G.chapterLimpStart = G.limp; if (G.resetHealth) G.resetHealth(); };   // la boiterie PERSISTE d'un chapitre à l'autre
   // Passage d'un chapitre à l'autre : fondu au noir, on décharge, on charge, fondu d'ouverture, carte de chapitre
@@ -86,7 +89,7 @@
     if (G.completed) return; G.completed = true; G.frozen = true;
     const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 1.2s'; f.style.opacity = 1; }
     const fx = G.audio && G.audio.fx; if (fx) fx('deliver', 1);
-    if (G.chapters[n + 1]) { G.save.chapter = n + 1; G.writeSave(); setTimeout(() => { G.completed = false; G.loadChapter(n + 1); }, 1500); }
+    if (G.chapters[n + 1]) { G.save.chapter = n + 1; G.writeSave(); setTimeout(() => { G.loadChapter(n + 1); }, 1500); }
     else setTimeout(() => { if (G.endLevelScreen) G.endLevelScreen('À SUIVRE', 'la suite arrive · cliquer pour rejouer le chapitre'); }, 1500);
   };
 
@@ -96,7 +99,7 @@
     b: { title: 'FIN — LE PRIX', lines: ['Tu gardes la clé. Elle ne vaut qu\'une chose : une vie contre une vie.', 'Le moteur au biodiesel tousse. Paris glisse derrière la vitre, sans un bruit.', 'Dans ta poche, la liste. Les autres noms attendent.'] }
   };
   G.showEnding = function (kind) {
-    const E = ENDINGS[kind]; if (!E || G.ended) return; G.ended = true; G.frozen = true; G.flag('ending_' + kind, true);
+    const E = ENDINGS[kind]; if (!E || G.ended) return; G.ended = true; G.frozen = true; G.flag('ending_' + kind, true); try { document.exitPointerLock(); } catch (e) {}
     const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;background:#000;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;color:#b4bcbc;font:1rem/1.7 "Courier New",monospace;text-align:center;padding:2rem;opacity:0;transition:opacity 2s';
     document.body.appendChild(d); requestAnimationFrame(() => { d.style.opacity = 1; });
     const add = (txt, delay, css) => setTimeout(() => { const p = document.createElement('div'); p.textContent = txt; p.style.cssText = 'max-width:34rem;opacity:0;transition:opacity 1.8s;' + (css || ''); d.appendChild(p); requestAnimationFrame(() => { p.style.opacity = 1; }); }, delay);
@@ -106,7 +109,7 @@
     const found = G.save.collect.length;
     add('Documents trouvés : ' + found + '   ·   Morts : ' + G.save.deaths, t1 + 3000, 'color:#626b6c;font-size:.8rem');
     add('[ cliquer pour revenir au menu ]', t1 + 5000, 'color:#626b6c;font-size:.8rem;cursor:pointer');
-    setTimeout(() => { d.style.cursor = 'pointer'; d.addEventListener('click', () => { G.save.chapter = 1; G.writeSave(); location.reload(); }); }, t1 + 5000);
+    setTimeout(() => { d.style.cursor = 'pointer'; d.addEventListener('click', () => { G.resetSave(); location.reload(); }); }, t1 + 5000);
   };
   G.loaded.push('story');
 })();

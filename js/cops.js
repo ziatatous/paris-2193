@@ -89,7 +89,7 @@
 
   /* ---------- Un policier ---------- */
   function addCop(group, home, facing, patrol) {
-    const c = { g: group, x: home[0], z: home[1], y: 0, facing, home: home.slice(), homeFacing: facing, patrol: patrol || null, pi: 0, state: 'idle', alert: 0, last: null, lostT: 0, searchT: 0,
+    const c = { g: group, x: home[0], z: home[1], y: 0, homeY: 0, facing, home: home.slice(), homeFacing: facing, patrol: patrol || null, pi: 0, state: 'idle', alert: 0, last: null, lostT: 0, searchT: 0,
       path: [], pathT: 0, speed: 0, phase: 0, v: new T.Vector3(), stuckT: 0, lx: home[0], lz: home[1], wait: 0, seed: Math.random() * 20, shoutT: 0 };
     c.lamp = G.addLamp({ x: home[0], y: 1.7, z: home[1], color: 0xcfe0ff, I: 0.75, dist: 9, halo: 0, bulb: false });
     G.scene.add(group); cops.push(c); return c;
@@ -257,7 +257,7 @@
      2. 'down'  : à terre, il est sur toi. ESPACE répété = te débattre : si la jauge se remplit tu te dégages et tu repars.
      3. 'cuff'  : bras tordus dans le dos, menottes, noir, retour au début. */
   function arrest(c) {
-    if (G.arrest) return;
+    if (G.arrest || G.dead || G.completed) return;
     if (c.roman) { romanKill(c); return; }
     const P = G.P; if (G.hidden) G.hidden.exit();
     const dx = P.pos.x - c.x, dz = P.pos.z - c.z, d = Math.hypot(dx, dz) || 1;
@@ -312,7 +312,7 @@
     const P = G.P; P.pos.set(0, 0, -6); P.yaw = 0; P.pitch = 0; P.vx = P.vy = P.vz = 0; P.mode = 'move'; P.anim = null; P.onGround = true; P.h = 1.75; P.stunT = 0; P.eye = 1.62; P.safe.set(0, 0, -6);
     G.resetCops(); G.alert = 0; G.arrest = null; G.frozen = false;
   }
-  G.resetCops = function () { for (const c of cops) { c.x = c.home[0]; c.z = c.home[1]; c.y = 0; c.state = 'idle'; c.alert = 0; c.last = null; c.path = []; c.facing = c.homeFacing; c.speed = 0; c.pi = 0; c.wait = 0; c.hideT = 0; } };
+  G.resetCops = function () { for (const c of cops) { c.x = c.home[0]; c.z = c.home[1]; c.y = c.homeY || 0; c.ammo = undefined; c.aimT = 0; c.reloadT = 0; c.fireCD = 0; c.staggerT = 0; c.lostT = 0; c.shoutT = 0; c.state = 'idle'; c.alert = 0; c.last = null; c.path = []; c.facing = c.homeFacing; c.speed = 0; c.pi = 0; c.wait = 0; c.hideT = 0; } };
   G.addCop = addCop;
 
   G.updateCops = function (dt) {

@@ -18,7 +18,7 @@
   // Vitesse de déplacement : réduite pendant la douleur (-45 %), puis boiterie permanente légère (-8 %)
   G.moveScale = function () { return G.painT > 0 ? 0.55 : (G.limp ? 0.92 : 1); };
   G.hurt = function (from) {
-    if (G.arrest || G.dead || G.completed) return;
+    if (G.arrest || G.dead || G.completed || G.frozen) return;
     G.wounds++;
     const P = G.P, f = G.audio && G.audio.fx;
     if (f) { f('hit', 1); setTimeout(() => f('pain', 0.9), 120); }

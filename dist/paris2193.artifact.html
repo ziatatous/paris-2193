@@ -5920,7 +5920,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
 
   /* ---------- Un policier ---------- */
   function addCop(group, home, facing, patrol) {
-    const c = { g: group, x: home[0], z: home[1], y: 0, facing, home: home.slice(), homeFacing: facing, patrol: patrol || null, pi: 0, state: 'idle', alert: 0, last: null, lostT: 0, searchT: 0,
+    const c = { g: group, x: home[0], z: home[1], y: 0, homeY: 0, facing, home: home.slice(), homeFacing: facing, patrol: patrol || null, pi: 0, state: 'idle', alert: 0, last: null, lostT: 0, searchT: 0,
       path: [], pathT: 0, speed: 0, phase: 0, v: new T.Vector3(), stuckT: 0, lx: home[0], lz: home[1], wait: 0, seed: Math.random() * 20, shoutT: 0 };
     c.lamp = G.addLamp({ x: home[0], y: 1.7, z: home[1], color: 0xcfe0ff, I: 0.75, dist: 9, halo: 0, bulb: false });
     G.scene.add(group); cops.push(c); return c;
@@ -6088,7 +6088,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
      2. 'down'  : à terre, il est sur toi. ESPACE répété = te débattre : si la jauge se remplit tu te dégages et tu repars.
      3. 'cuff'  : bras tordus dans le dos, menottes, noir, retour au début. */
   function arrest(c) {
-    if (G.arrest) return;
+    if (G.arrest || G.dead || G.completed) return;
     if (c.roman) { romanKill(c); return; }
     const P = G.P; if (G.hidden) G.hidden.exit();
     const dx = P.pos.x - c.x, dz = P.pos.z - c.z, d = Math.hypot(dx, dz) || 1;
@@ -6143,7 +6143,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const P = G.P; P.pos.set(0, 0, -6); P.yaw = 0; P.pitch = 0; P.vx = P.vy = P.vz = 0; P.mode = 'move'; P.anim = null; P.onGround = true; P.h = 1.75; P.stunT = 0; P.eye = 1.62; P.safe.set(0, 0, -6);
     G.resetCops(); G.alert = 0; G.arrest = null; G.frozen = false;
   }
-  G.resetCops = function () { for (const c of cops) { c.x = c.home[0]; c.z = c.home[1]; c.y = 0; c.state = 'idle'; c.alert = 0; c.last = null; c.path = []; c.facing = c.homeFacing; c.speed = 0; c.pi = 0; c.wait = 0; c.hideT = 0; } };
+  G.resetCops = function () { for (const c of cops) { c.x = c.home[0]; c.z = c.home[1]; c.y = c.homeY || 0; c.ammo = undefined; c.aimT = 0; c.reloadT = 0; c.fireCD = 0; c.staggerT = 0; c.lostT = 0; c.shoutT = 0; c.state = 'idle'; c.alert = 0; c.last = null; c.path = []; c.facing = c.homeFacing; c.speed = 0; c.pi = 0; c.wait = 0; c.hideT = 0; } };
   G.addCop = addCop;
 
   G.updateCops = function (dt) {
@@ -6189,7 +6189,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   // Vitesse de déplacement : réduite pendant la douleur (-45 %), puis boiterie permanente légère (-8 %)
   G.moveScale = function () { return G.painT > 0 ? 0.55 : (G.limp ? 0.92 : 1); };
   G.hurt = function (from) {
-    if (G.arrest || G.dead || G.completed) return;
+    if (G.arrest || G.dead || G.completed || G.frozen) return;
     G.wounds++;
     const P = G.P, f = G.audio && G.audio.fx;
     if (f) { f('hit', 1); setTimeout(() => f('pain', 0.9), 120); }
@@ -6275,8 +6275,8 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       const lines = [[0, '…Dima ?'], [2600, '« Tu sors à cette heure-ci… Va. Je veille sur Mila. »'], [6800, '« Mais reviens avant la nuit. Pour elle. »']];
       const trig = G.addTrigger(p => Math.abs(p.pos.y - yf) < 1.6 && p.pos.x > 3.3 && p.pos.x < 6.9 && p.pos.z > Z0 + WT && p.pos.z < 25.9, () => {
         st.target = 1; const f = G.audio && G.audio.fx; if (f) f('door', 0.7);
-        for (const [t, txt] of lines) setTimeout(() => { if (st.target > 0) G.say(txt, 2800); }, t);
-        setTimeout(() => { st.target = 0; const f2 = G.audio && G.audio.fx; if (f2) f2('door', 0.5); }, 10500);
+        for (const [t, txt] of lines) G.later(() => { if (st.target > 0) G.say(txt, 2800); }, t);
+        G.later(() => { st.target = 0; const f2 = G.audio && G.audio.fx; if (f2) f2('door', 0.5); }, 10500);
       });
       trig.reset = () => { st.target = 0; st.open = 0; };
     }
@@ -6836,9 +6836,9 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
      REMISE À ZÉRO INSTANTANÉE (arrestation) et FIN DE NIVEAU
      --------------------------------------------------------------- */
   G.resetLevel = function () {                                     // arrestation / mort : retour instantané au début du chapitre (l'histoire et les objets trouvés sont conservés)
-    G.placeStart(); const P = G.P;
+    G.epoch++; G.placeStart(); const P = G.P; if (G.cleanPlayerState) G.cleanPlayerState();
     P.safe.copy(P.pos); P.stunT = 0; P.wallUsed = false; P.dashT = 0; P.dashAir = false; P.slideT = 0; P.coyote = 0;
-    G.have = []; G.hidden = null; slit(false); G.arrest = null; G.frozen = false; G.alert = 0; G.completed = false; G.resetCops(); if (G.resetHealth) G.resetHealth();
+    G.have = []; G.hidden = null; slit(false); G.arrest = null; G.frozen = false; G.alert = 0; G.completed = false; G.resetCops(); if (G.resetHealth) G.resetHealth(); if (G.flag) { G.limp = !!G.chapterLimpStart; G.flag('wounded', G.limp); } G.dead = false;
     if (G.save) { G.save.deaths++; G.writeSave(); }
     for (const h of G.hides) if (h.anim) h.anim(true);
     for (const fn of G.onReset) fn();
@@ -6920,7 +6920,10 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   G.chapters = {
     1: { name: 'Chez nous', build() { G.buildLevel1(); } }
   };
-  G.currentChapter = 0;
+  G.currentChapter = 0; G.epoch = 0;
+  // Minuteur lié au chapitre : annulé si on change de chapitre ou si on recommence (mort/arrestation)
+  G.later = function (fn, ms) { const e = G.epoch; return setTimeout(() => { if (e === G.epoch) fn(); }, ms); };
+  G.cleanPlayerState = function () { const P = G.P; if (P) { P.animRoll = P.animPitch = P.animDip = P.kickP = P.kickR = 0; } const s = document.getElementById('slit'); if (s) s.style.display = 'none'; if (G.closeDoc) G.closeDoc(); };
   // Déclencheurs d'événements (scènes scriptées) : test(P) vrai -> fire() une seule fois ; réarmés quand on recommence le chapitre
   G.triggers = [];
   G.addTrigger = function (test, fire) { const t = { test, fire, done: false }; G.triggers.push(t); G.onReset.push(() => { t.done = false; if (t.reset) t.reset(); }); return t; };
@@ -6934,7 +6937,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     });
     for (const c of sc.children.slice()) sc.remove(c);
     G.lamps.length = 0; G.interactables.length = 0; G.animated.length = 0; G.onReset.length = 0; if (G.hides) G.hides.length = 0; if (G.cops) G.cops.length = 0; if (G.triggers) G.triggers.length = 0;
-    if (G.clearParkour) G.clearParkour(); G.killY = undefined; G.fogOverride = undefined; G.drone = null; G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
+    if (G.clearParkour) G.clearParkour(); G.epoch++; G.cleanPlayerState(); G.dead = false; G.killY = undefined; G.fogOverride = undefined; G.drone = null; G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
   };
   G.buildChapter = function (n) { G.buildBase(); G.chapters[n].build(); G.currentChapter = n; G.limp = G.flag('wounded'); G.chapterLimpStart = G.limp; if (G.resetHealth) G.resetHealth(); };   // la boiterie PERSISTE d'un chapitre à l'autre
   // Passage d'un chapitre à l'autre : fondu au noir, on décharge, on charge, fondu d'ouverture, carte de chapitre
@@ -6951,7 +6954,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     if (G.completed) return; G.completed = true; G.frozen = true;
     const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 1.2s'; f.style.opacity = 1; }
     const fx = G.audio && G.audio.fx; if (fx) fx('deliver', 1);
-    if (G.chapters[n + 1]) { G.save.chapter = n + 1; G.writeSave(); setTimeout(() => { G.completed = false; G.loadChapter(n + 1); }, 1500); }
+    if (G.chapters[n + 1]) { G.save.chapter = n + 1; G.writeSave(); setTimeout(() => { G.loadChapter(n + 1); }, 1500); }
     else setTimeout(() => { if (G.endLevelScreen) G.endLevelScreen('À SUIVRE', 'la suite arrive · cliquer pour rejouer le chapitre'); }, 1500);
   };
 
@@ -6961,7 +6964,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     b: { title: 'FIN — LE PRIX', lines: ['Tu gardes la clé. Elle ne vaut qu\'une chose : une vie contre une vie.', 'Le moteur au biodiesel tousse. Paris glisse derrière la vitre, sans un bruit.', 'Dans ta poche, la liste. Les autres noms attendent.'] }
   };
   G.showEnding = function (kind) {
-    const E = ENDINGS[kind]; if (!E || G.ended) return; G.ended = true; G.frozen = true; G.flag('ending_' + kind, true);
+    const E = ENDINGS[kind]; if (!E || G.ended) return; G.ended = true; G.frozen = true; G.flag('ending_' + kind, true); try { document.exitPointerLock(); } catch (e) {}
     const d = document.createElement('div'); d.style.cssText = 'position:fixed;inset:0;background:#000;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;color:#b4bcbc;font:1rem/1.7 "Courier New",monospace;text-align:center;padding:2rem;opacity:0;transition:opacity 2s';
     document.body.appendChild(d); requestAnimationFrame(() => { d.style.opacity = 1; });
     const add = (txt, delay, css) => setTimeout(() => { const p = document.createElement('div'); p.textContent = txt; p.style.cssText = 'max-width:34rem;opacity:0;transition:opacity 1.8s;' + (css || ''); d.appendChild(p); requestAnimationFrame(() => { p.style.opacity = 1; }); }, delay);
@@ -6971,7 +6974,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const found = G.save.collect.length;
     add('Documents trouvés : ' + found + '   ·   Morts : ' + G.save.deaths, t1 + 3000, 'color:#626b6c;font-size:.8rem');
     add('[ cliquer pour revenir au menu ]', t1 + 5000, 'color:#626b6c;font-size:.8rem;cursor:pointer');
-    setTimeout(() => { d.style.cursor = 'pointer'; d.addEventListener('click', () => { G.save.chapter = 1; G.writeSave(); location.reload(); }); }, t1 + 5000);
+    setTimeout(() => { d.style.cursor = 'pointer'; d.addEventListener('click', () => { G.resetSave(); location.reload(); }); }, t1 + 5000);
   };
   G.loaded.push('story');
 })();
@@ -7087,12 +7090,13 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const sam = G.L.civilian(); sam.position.set(9.4, 0, 19.0); sam.rotation.y = Math.PI; G.scene.add(sam);           // au sud du terminal, tourné vers lui
     const state = { phase: 0 };
     const lines = [[1500, 'SAMUEL : « Dima… C\'est quoi, ça ? Où t\'as eu cette clé ? »'], [5200, 'SAMUEL : « Ce n\'est pas une dette. Ce sont des noms. Des gamins. »'], [9200, 'SAMUEL : « Reprends-la. Va au garage de la rue du Pont. Cherche Léna. Passe par le marché, pas par la rue. »']];
-    for (const [t, txt] of lines) setTimeout(() => { if (G.currentChapter === 2 && state.phase === 0 && !G.completed) say(txt, 3800); }, t);
+    const opening = () => { for (const [t, txt] of lines) G.later(() => { if (G.currentChapter === 2 && state.phase === 0 && !G.completed) say(txt, 3800); }, t); };
+    opening(); G.onReset.push(opening);
     const keyItem = { id: 'key_terminal', pos: new T.Vector3(9.4, 0.95, 17.9), radius: 2.2, prompt: 'Reprendre la clé',
       use() {
         G.interactables = G.interactables.filter(i => i !== keyItem); state.phase = 1; G.say('', 1);
-        fx('whistle', 0.8); setTimeout(() => { fx('shot', 1); sam.rotation.x = -Math.PI / 2; sam.position.set(9.0, 0.22, 18.6); fx('pain', 0.6); state.phase = 2; G.L.trail([[9.0, 18.4], [9.4, 18.9], [9.1, 19.4]], 0.25); }, 900);
-        setTimeout(() => say('Samuel s\'effondre. Quelqu\'un a tiré de la rue. Cours.', 4500), 1500); setTimeout(() => fx('whistle', 0.6), 2400); G.objective = 'Traverse le marché. Sors par l\'escalier, à l\'est.';
+        fx('whistle', 0.8); G.later(() => { fx('shot', 1); sam.rotation.x = -Math.PI / 2; sam.position.set(9.0, 0.22, 18.6); fx('pain', 0.6); state.phase = 2; G.L.trail([[9.0, 18.4], [9.4, 18.9], [9.1, 19.4]], 0.25); }, 900);
+        G.later(() => say('Samuel s\'effondre. Quelqu\'un a tiré de la rue. Cours.', 4500), 1500); G.later(() => fx('whistle', 0.6), 2400); G.objective = 'Traverse le marché. Sors par l\'escalier, à l\'est.';
       } };
     G.interactables.push(keyItem);
     G.onReset.push(() => { state.phase = 0; sam.rotation.x = 0; sam.position.set(9.4, 0, 19.0); if (!G.interactables.includes(keyItem)) G.interactables.push(keyItem); G.have = ['usb-chez-nous']; });
@@ -7101,7 +7105,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const rm = roman(); rm.position.set(46.2, 0, 7.5); rm.rotation.y = -Math.PI / 2; rm.visible = false; G.scene.add(rm);
     const tr = G.addTrigger(p => p.pos.z < 11.5 && p.pos.x > 34.5 && p.pos.x < 37 && p.pos.y < 2, () => {
       rm.visible = true; fx('creak', 0.9); fx('stinger', 0.6); say('Au bout du couloir, quelqu\'un te regarde.', 3000);
-      setTimeout(() => { rm.visible = false; fx('door', 0.6); }, 4200);
+      G.later(() => { rm.visible = false; fx('door', 0.6); }, 4200);
     });
     tr.reset = () => { rm.visible = false; };
     // ---- Sortie : la porte de l'escalier (ch. 3 : les toits) ----
@@ -7190,7 +7194,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
         if (!G.have.includes('usb-chez-nous')) { say('Il me faut la clé.', 2000); return; }
         st.read = true; G.flag('registre', true); G.objective = 'Descends par l\'échelle de service (sud). Il faut trouver Léna, au garage.';
         G.collect('registre', 'REGISTRE — LOT 14', 'FILTRATION PULMONAIRE · SUJETS PRÉLEVÉS · PÉRIODE 2193-Q4\n\n 0412  A. Petrova, 8 ans .......... affecté\n 0413  T. Idris, 10 ans ........... affecté\n 0414  M. OKAFOR-LENOIR, 9 ans .... ASSIGNÉE · asthme : sujet idéal\n\nPrélèvement prévu : cette nuit.\n\nTu relis la ligne trois. Tu la relis encore.');
-        setTimeout(() => say('Cette nuit. Mila.', 4500), 400);
+        G.later(() => say('Cette nuit. Mila.', 4500), 400);
       } });
     // Sortie : échelle de service au bord sud de R4 ; ici on la montre comme une trappe qui descend
     G.interactables.push({ id: 'sortie', pos: new T.Vector3(57, 15.6, 4.3), radius: 2.3, prompt: 'Descendre l\'échelle de service',
@@ -7198,7 +7202,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     G.onReset.push(() => { st.read = false; G.have = ['usb-chez-nous']; });
 
     // ---- Policiers ARMÉS (restent sur leur toit : « leash ») + drone ----
-    const armed = (home, facing, patrol, roof) => { const c = G.addCop(G.makeCop(), home, facing, patrol); c.armed = true; c.y = roof[4]; const r = roof; c.leash = { x0: r[0] + 0.6, x1: r[1] - 0.6, z0: r[2] + 0.6, z1: r[3] - 0.6 }; return c; };
+    const armed = (home, facing, patrol, roof) => { const c = G.addCop(G.makeCop(), home, facing, patrol); c.armed = true; c.y = c.homeY = roof[4]; const r = roof; c.leash = { x0: r[0] + 0.6, x1: r[1] - 0.6, z0: r[2] + 0.6, z1: r[3] - 0.6 }; return c; };
     armed([33, 0], Math.PI, [[33, -2.5], [29, -2.5], [29, 2.5], [33, 2.5]], ROOFS.R2);
     armed([59.5, -3], Math.PI, [[56, -3], [59.5, -3], [59.5, 3.5], [56, 3.5]], ROOFS.R4);
     // grille de navigation faite à la main : seules les cases SUR un toit sont libres
@@ -7333,7 +7337,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       use() {
         wheel.visible = false; G.interactables = G.interactables.filter(i => i !== wheelItem); R.wheel = true; R.phase = 1; G.have.push('volant');
         G.objective = 'Retourne à la grille et ouvre la vanne. Quelque chose te suit.'; say('Un volant de vanne. Derrière toi, quelque chose heurte un tuyau.', 4500); fx('stinger', 0.8); fx('creak', 0.6);
-        setTimeout(() => { if (R.phase === 1 && G.currentChapter === 4) spawnRoman(); }, 5000);
+        G.later(() => { if (R.phase === 1 && G.currentChapter === 4) spawnRoman(); }, 5000);
       } };
     G.interactables.push(wheelItem);
 
@@ -7350,12 +7354,12 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       use() {
         if (!R.wheel) { say('Une vanne sans volant. Il en faut un.', 2500); return; }
         valveWheel.visible = true;
-        if (!R.gateOpen) { R.gateOpen = true; gst.target = 1; gateCol.minY = 99; gateCol.maxY = 100; fx('door', 0.9); fx('creak', 0.8); setTimeout(rebuildNav, 1200); G.objective = 'La grille s\'ouvre. Passe. Tu peux la refermer derrière toi.'; say('La grille remonte en grinçant.', 3000); valve.prompt = 'Refermer la grille'; }
+        if (!R.gateOpen) { R.gateOpen = true; gst.target = 1; gateCol.minY = 99; gateCol.maxY = 100; fx('door', 0.9); fx('creak', 0.8); G.later(rebuildNav, 1200); G.objective = 'La grille s\'ouvre. Passe. Tu peux la refermer derrière toi.'; say('La grille remonte en grinçant.', 3000); valve.prompt = 'Refermer la grille'; }
         else if (!R.gateClosed) {
           const rc = R.cop; if (rc && R.active && Math.hypot(rc.x - 35.2, rc.z - 19) < 2.2) { say('Il est trop près. Impossible de la refermer.', 2500); return; }
           if (P().pos.x < 36.5) { say('Il faut être de l\'autre côté.', 2200); return; }
-          R.gateClosed = true; gst.target = 0; gateCol.minY = 0; gateCol.maxY = 2.7; fx('door', 1); setTimeout(rebuildNav, 3000); valve.prompt = '…'; say('La grille se referme. Tiens bon.', 3000); G.objective = 'Il va chercher un autre chemin. Rejoins le garage.';
-          setTimeout(() => ventScare(), 12000);
+          R.gateClosed = true; gst.target = 0; gateCol.minY = 0; gateCol.maxY = 2.7; fx('door', 1); G.later(rebuildNav, 3000); valve.prompt = '…'; say('La grille se referme. Tiens bon.', 3000); G.objective = 'Il va chercher un autre chemin. Rejoins le garage.';
+          G.later(() => ventScare(), 12000);
         }
       } };
     G.interactables.push(valve);
@@ -7383,9 +7387,9 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const dst = { y: 4.5, target: 4.5 }; let doorCol = null;
     G.animated.push({ update(dt) { if (Math.abs(dst.y - dst.target) > 0.001) { dst.y += Math.sign(dst.target - dst.y) * Math.min(Math.abs(dst.target - dst.y), dt * 2.4); door.position.y = dst.y; } } });
     const trSafe = G.addTrigger(p => p.pos.x > 56.2 && p.pos.x < 62.5 && p.pos.z > 15.5 && p.pos.z < 22.5, () => {
-      R.safe = true; dst.target = 1.5; doorCol = G.addBoxCollider(55.0, 55.3, 0, 3.0, 18, 20); fx('door', 1); setTimeout(() => fx('thud', 1), 500); setTimeout(() => fx('thud', 0.9), 1300); setTimeout(() => fx('thud', 0.7), 2400);
+      R.safe = true; dst.target = 1.5; doorCol = G.addBoxCollider(55.0, 55.3, 0, 3.0, 18, 20); fx('door', 1); G.later(() => fx('thud', 1), 500); G.later(() => fx('thud', 0.9), 1300); G.later(() => fx('thud', 0.7), 2400);
       if (R.cop) R.cop.frozenLab = true; G.objective = 'La porte s\'est refermée. Léna est là.'; say('Derrière la porte, quelqu\'un cogne. Puis plus rien. Tu es en sécurité.', 5000);
-      setTimeout(() => say('LÉNA : « Dima. On t\'attendait. Elle va bien. Elle est dans la voiture. »', 5500), 5500);
+      G.later(() => say('LÉNA : « Dima. On t\'attendait. Elle va bien. Elle est dans la voiture. »', 5500), 5500);
     });
     trSafe.reset = () => { R.safe = false; dst.target = dst.y = 4.5; door.position.y = 4.5; if (doorCol) { doorCol.minY = 99; doorCol.maxY = 100; } };
     // voiture au biodiesel : carcasse sombre, phares
@@ -8055,7 +8059,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       G.keys[e.code] = true;
       if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
       if (e.key && e.key.toLowerCase() === 'm') G.audio.toggleMusic();   // la lettre M, quelle que soit la disposition du clavier
-      if (e.code === 'KeyE' && playing && !G.docOpen) { if (G.hidden) G.hidden.exit(); else if (G.focus) G.focus.use(); }
+      if (e.code === 'KeyE' && playing && !G.docOpen && !e.repeat && !G.dead && !G.completed && !G.arrest && !(G.frozen && !G.hidden)) { if (G.hidden) G.hidden.exit(); else if (G.focus) G.focus.use(); }
     });
     addEventListener('keyup', e => { G.keys[e.code] = false; });
     addEventListener('blur', () => { for (const k in G.keys) G.keys[k] = false; });
