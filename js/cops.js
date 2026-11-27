@@ -236,7 +236,7 @@
     const P = G.P; if (G.hidden) G.hidden.exit();
     const dx = P.pos.x - c.x, dz = P.pos.z - c.z, d = Math.hypot(dx, dz) || 1;
     G.arrest = { stage: 'shove', t: 0, cop: c, dir: [dx / d, dz / d], prog: 0, prevSp: !!G.keys.Space, said: 0, clicked: false };
-    G.frozen = true; P.vx = P.vz = 0; P.mode = 'move'; P.anim = null; snd('fx', 'cop_alert', 1);
+    G.frozen = true; P.vx = P.vz = 0; P.mode = 'move'; P.anim = null; snd('fx', 'cop_alert', 1); snd('fx', 'hit', 1); setTimeout(() => snd('fx', 'pain', 0.8), 250);
   }
   function endArrest(escaped) {
     const A = G.arrest, P = G.P, c = A.cop;

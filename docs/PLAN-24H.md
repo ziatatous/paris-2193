@@ -33,3 +33,4 @@ Règle d'or (leçon de la pause) : **petites étapes, vérifiées à l'écran (c
 ## Journal
 - 2026-11-27 15:30 : plan + histoire écrits.
 - 2026-11-27 16:05 : fondations posées (three.js intégré, CSP, sauvegarde + test, banc d'essai `tests/`), chambre sobre (lit hors de la porte, plus de câbles), Mila dort, 3 dessins + 2 mots + veilleuse ; flics : pas de téléportation en simulation, halo de lampe visible de loin.
+- 2026-11-27 17:10 : questions posées -> réponses notées. Moteur de FX sonores par code (`js/sfx.js`, 23 sons, test `tests/sfx_test.js`), branchés dans audio.js (remplacés par tes fichiers s'il y en a). Reste à brancher : portes, grincements, stingers dans les chapitres.

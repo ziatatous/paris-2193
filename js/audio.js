@@ -1,5 +1,5 @@
 /* =====================================================================
-   audio.js : lit TES fichiers sons (plus aucun son généré par code).
+   audio.js : lit TES fichiers sons ; pour chaque dossier SANS fichier, utilise les FX fabriqués par code (js/sfx.js).
    - audio/music/*            : musique du jeu, jouée en boucle aléatoire avec fondu.
    - audio/fx/<element>/*     : un dossier par élément (pas, saut, ambiance...). S'il y a plusieurs
                                 fichiers dans un dossier, le jeu en choisit un au hasard à chaque fois.
@@ -34,7 +34,8 @@
         catch (e) { console.warn('[audio] fichier illisible :', url); }
       }
     }
-    startLoops(); startMusic(); scheduleSiren(40000);
+    if (G.sfx) for (const name of G.sfx.names) if (!buf[name] || !buf[name].length) { const made = G.sfx.make(ac, name); if (made) buf[name] = made; }   // FX par défaut
+    A.buffers = buf; startLoops(); startMusic(); scheduleSiren(40000);
   };
   A.suspend = () => { if (ac && ac.state === 'running') { ac.suspend(); if (curMusic) curMusic.pause(); } };
   A.resume = () => { if (ac && ac.state === 'suspended') { ac.resume(); if (curMusic) curMusic.play().catch(() => {}); } };
@@ -56,7 +57,7 @@
   }
   function startLoops() {
     loops.inside = makeLoop('ambience_inside'); loops.outside = makeLoop('ambience_outside');
-    loops.breathIdle = makeLoop('breath_idle'); loops.breathRun = makeLoop('breath_run'); loops.heartbeat = makeLoop('heartbeat');
+    loops.breathIdle = makeLoop('breath_idle'); loops.breathRun = makeLoop('breath_run'); loops.heartbeat = makeLoop('heartbeat'); loops.drone = makeLoop('drone');
     const p = ac.createPanner(); p.panningModel = 'HRTF'; p.refDistance = 1; p.rolloffFactor = 1.6;   // l'écran : son placé dans la pièce
     if (G.crtPos) { p.positionX.value = G.crtPos.x; p.positionY.value = G.crtPos.y; p.positionZ.value = G.crtPos.z; }
     p.connect(fxBus); loops.crt = makeLoop('crt', p);
@@ -91,6 +92,7 @@
     if (loops.crt) loops.crt.g.gain.setTargetAtTime(1, t, 0.2);
     if (loops.breathIdle) loops.breathIdle.g.gain.setTargetAtTime(0.6 * (1 - exert), t, 0.4);
     if (loops.breathRun) loops.breathRun.g.gain.setTargetAtTime(exert, t, 0.4);
+    if (loops.drone) loops.drone.g.gain.setTargetAtTime(0.35 + 0.5 * (G.alert || 0), t, 1.2);       // grondement de fond, qui monte avec la menace
     if (loops.heartbeat) loops.heartbeat.g.gain.setTargetAtTime(G.clamp(((G.alert || 0) - 0.4) * 1.7, 0, 1), t, 0.3);   // le coeur bat quand la police approche
     const L = ac.listener;
     if (L.positionX) {

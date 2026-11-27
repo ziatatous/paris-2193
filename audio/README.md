@@ -34,3 +34,7 @@ Les sons ne sont lus que si les fichiers sont publiés avec le jeu. Demande-moi 
 
 - `hide/` : son quand on entre/sort d'une cachette.
 - `deliver/` : son de la livraison de la clé.
+
+## FX générés par code (js/sfx.js)
+Chaque dossier ci-dessus SANS fichier utilise un son fabriqué par le jeu. Dossiers supplémentaires utilisés : `door/`, `creak/`, `stinger/`, `drone/`, `thud/`, `hit/`, `pain/`.
+Déposer un fichier dans `audio/fx/<dossier>/` remplace le son généré. La **musique** vient toujours de `audio/music/` (fournie par toi).
