@@ -41,3 +41,4 @@ Règle d'or (leçon de la pause) : **petites étapes, vérifiées à l'écran (c
 - 2026-11-27 22:40 : tous les tests de régression passent (reset_state, tirs, enchaînement, bots ch1-4). Roman rééquilibré (speedMul 1,15 : rattrape qui marche, perd qui court) + `tests/roman_test.js`. Version 23 publiée.
 - 2026-11-27 23:30 : journal (Tab : objectif, documents, morts, commandes, pause) + `tests/journal_test.js` OK. Version 24.
 - 2026-11-28 00:10 : `tests/full_run.js` (partie complète 1->4 avec transitions réelles) OK ; il a révélé un étal qui fermait l'entrée de la boucle nord du marché (déplacé). Version 25.
+- 2026-11-28 02:00 : réglage de la furtivité (alerte progressive, portée 17 m, ronde du marché décalée, étals avec couloir de glisse) ; option d'ASSISTANCE dans le menu (policiers moins attentifs) pour que le joueur règle la difficulté ; `tests/stealth_test.js` (bots) = mesure indicative seulement.

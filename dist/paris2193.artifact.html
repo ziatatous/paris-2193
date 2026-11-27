@@ -83,6 +83,7 @@
       <button data-q="low">BAS</button><button data-q="medium">MOYEN</button><button data-q="high">HAUT</button></div>
     <div class="row"><label>Sensibilité</label><input type="range" id="o-sens" min="0.4" max="2" step="0.05"></div>
     <div class="row"><label>Mouvements brouillons</label><input type="range" id="o-chaos" min="0" max="1" step="0.05"></div>
+    <div class="row"><label>Assistance (policiers moins attentifs)</label><input type="range" id="o-assist" min="0" max="1" step="0.1"></div>
     <div class="row"><label>Volume général</label><input type="range" id="o-vol" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Musique</label><input type="range" id="o-music" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Effets</label><input type="range" id="o-fx" min="0" max="1" step="0.05"></div>
@@ -123,9 +124,9 @@
   G.T = window.THREE;
 
   // --- Réglages du joueur (sauvegardés dans le navigateur si possible) ---
-  G.settings = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
+  G.settings = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6, assist: 0 };
   G.loadSettings = function () {
-    const RANGES = { sens: [0.2, 3], volume: [0, 1], music: [0, 1], fx: [0, 1], chaos: [0, 1] };     // lecture validée : on ne fait jamais confiance au stockage
+    const RANGES = { sens: [0.2, 3], volume: [0, 1], music: [0, 1], fx: [0, 1], chaos: [0, 1], assist: [0, 1] };     // lecture validée : on ne fait jamais confiance au stockage
     try { const raw = JSON.parse(localStorage.getItem('paris2193') || '{}'); if (raw && typeof raw === 'object') { for (const k in RANGES) if (typeof raw[k] === 'number' && isFinite(raw[k])) G.settings[k] = Math.min(RANGES[k][1], Math.max(RANGES[k][0], raw[k])); if (['low', 'medium', 'high'].includes(raw.quality)) G.settings.quality = raw.quality; } } catch (e) { /* pas grave */ }
   };
   G.saveSettings = function () {
@@ -5937,13 +5938,13 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const P = G.P, dx = P.pos.x - c.x, dz = P.pos.z - c.z, dist = Math.hypot(dx, dz);
     const crouched = P.h < 1.5, hidden = !!G.hidden;
     const lf = G.clamp(0.45 + G.lightAt(P.pos.x, P.pos.y + 1, P.pos.z, c.lamp) * 0.85, 0.45, 1.25);        // dans le noir on est moins visible, près d'une flamme on l'est plus
-    const range = 17 * (c.keen || 1) * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
+    const assist = (G.settings && G.settings.assist) || 0, range = 17 * (1 - 0.25 * assist) * (c.keen || 1) * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
     const dot = dist > 0.01 ? (dx * Math.sin(c.facing) + dz * Math.cos(c.facing)) / dist : 1;
     const e = [P.pos.x, P.pos.y + (crouched ? 0.7 : 1.2), P.pos.z];
     const sees = !G.arrest && !hidden && dist < range && (dist < (crouched ? 1.8 : 3) || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));
     const noise = P.mode === 'slide' || P.dashT > 0 ? 12 : P.sprint ? 8 : P.mode === 'wallrun' ? 9 : (P.speed > 1 && P.h > 1.5) ? 3 : 1;
-    const hears = !G.arrest && !hidden && !sees && dist < noise * (c.keen || 1) && Math.abs(P.pos.y - c.y) < 3;
-    if (sees) { c.alert = Math.min(1.5, c.alert + dt * (0.35 + (1 - dist / range) * 1.15)); c.last = [P.pos.x, P.pos.z]; c.lostT = 0; }
+    const hears = !G.arrest && !hidden && !sees && dist < noise * (c.keen || 1) * (1 - 0.3 * assist) && Math.abs(P.pos.y - c.y) < 3;
+    if (sees) { c.alert = Math.min(1.5, c.alert + dt * (0.35 + (1 - dist / range) * 1.15) * (1 - 0.5 * assist)); c.last = [P.pos.x, P.pos.z]; c.lostT = 0; }
     else if (hears) { c.alert = Math.min(1.5, c.alert + dt * 0.4); c.last = [P.pos.x + (Math.random() - 0.5) * 3, P.pos.z + (Math.random() - 0.5) * 3]; }
     else if (c.state !== 'chase') c.alert = Math.max(0, c.alert - dt * 0.3);
     return { sees, dist };
@@ -7070,8 +7071,8 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     for (let z = 16.05; z < 22; z += 0.22) G.B(40.0, 40.06, 0, 3.0, z, z + 0.05, M().iron, { collide: false, grime: false });
     G.B(40.0, 40.08, 2.9, 3.0, 16, 22, M().iron, { collide: false, grime: false }); G.B(40.0, 40.08, 0.9, 0.98, 16, 22, M().iron, { collide: false, grime: false });
     // ---- Étals (alternés : le passage serpente, 2 à 3 m utiles) ----
-    for (const [x, z, ry, col] of [[17, 16.7, 0, 0x3a4038], [23, 16.7, 0, 0x4a3a30], [29, 16.7, 0, 0x2e3a42], [32.4, 16.7, 0, 0x3a4038], [20, 20.3, Math.PI, 0x4a3a30], [26, 20.3, Math.PI, 0x3a4038], [32, 20.3, Math.PI, 0x2e3a42], [37.5, 20.3, Math.PI, 0x4a3a30],
-      [44, 16.7, 0, 0x3a4038], [47.5, 20.3, Math.PI, 0x4a3a30]]) stall(x, z, ry, col);
+    for (const [x, z, ry, col] of [[17, 17.5, 0, 0x3a4038], [23, 17.5, 0, 0x4a3a30], [29, 17.5, 0, 0x2e3a42], [32.4, 17.5, 0, 0x3a4038], [20, 20.5, Math.PI, 0x4a3a30], [26, 20.5, Math.PI, 0x3a4038], [32, 20.5, Math.PI, 0x2e3a42], [37.5, 20.5, Math.PI, 0x4a3a30],
+      [44, 17.5, 0, 0x3a4038], [47.5, 20.5, Math.PI, 0x4a3a30]]) stall(x, z, ry, col);
     G.L.crate(24.5, 18.4, 1.0, 0.9, 0.3); G.L.crate(25.6, 18.6, 0.9, 0.9, 0.1); G.L.crate(33, 18.5, 1.0, 0.9, 0.2); G.L.crate(15.5, 18.5, 1.0, 0.9, 0); G.L.crate(43, 18.6, 1.0, 0.9, 0.3); G.L.crate(36.5, 12, 1.0, 0.9, 0.1);
     G.L.barrel(14.5, 16.5); G.L.barrel(14.5, 20.6); G.L.barrel(49.5, 16.6);
     // ---- Cachettes (E) ----
@@ -8129,9 +8130,9 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   'use strict';
   const $ = id => document.getElementById(id);
   const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'health', 'building', 'levels', 'story', 'chapter2', 'chapter3', 'chapter4', 'player', 'parkour2', 'sfx', 'audio', 'game'];
-  const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
+  const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6, assist: 0 };
   // Lecture validée : seules les clés connues, des nombres bornés, une qualité de la liste (on ne fait jamais confiance à ce qui vient du stockage)
-  const RANGES = { sens: [0.2, 3], volume: [0, 1], music: [0, 1], fx: [0, 1], chaos: [0, 1] };
+  const RANGES = { sens: [0.2, 3], volume: [0, 1], music: [0, 1], fx: [0, 1], chaos: [0, 1], assist: [0, 1] };
   try { const raw = JSON.parse(localStorage.getItem('paris2193') || '{}'); if (raw && typeof raw === 'object') { for (const k in RANGES) if (typeof raw[k] === 'number' && isFinite(raw[k])) S[k] = Math.min(RANGES[k][1], Math.max(RANGES[k][0], raw[k])); if (['low', 'medium', 'high'].includes(raw.quality)) S.quality = raw.quality; } } catch (e) { /* pas grave */ }
   const save = () => { try { localStorage.setItem('paris2193', JSON.stringify(S)); } catch (e) { /* pas grave */ } };
   const show = id => { for (const p of ['p-main', 'p-opt', 'p-load']) $(p).hidden = p !== id; };
@@ -8143,11 +8144,12 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   // --- Options ---
   function refreshOpt() {
     document.querySelectorAll('[data-q]').forEach(b => b.classList.toggle('on', b.dataset.q === S.quality));
-    $('o-sens').value = S.sens; $('o-chaos').value = S.chaos; $('o-vol').value = S.volume; $('o-music').value = S.music; $('o-fx').value = S.fx;
+    $('o-sens').value = S.sens; $('o-chaos').value = S.chaos; $('o-assist').value = S.assist; $('o-vol').value = S.volume; $('o-music').value = S.music; $('o-fx').value = S.fx;
   }
   document.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { S.quality = b.dataset.q; save(); refreshOpt(); }));
   $('o-sens').addEventListener('input', e => { S.sens = +e.target.value; save(); });
   $('o-chaos').addEventListener('input', e => { S.chaos = +e.target.value; save(); });
+  $('o-assist').addEventListener('input', e => { S.assist = +e.target.value; save(); });
   $('o-vol').addEventListener('input', e => { S.volume = +e.target.value; save(); });
   $('o-music').addEventListener('input', e => { S.music = +e.target.value; save(); });
   $('o-fx').addEventListener('input', e => { S.fx = +e.target.value; save(); });
