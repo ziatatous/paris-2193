@@ -129,7 +129,7 @@
       use() { if (state.phase < 2) { say('Pas sans la clé.', 2000); return; } G.completeChapter(2); } });
 
     // ---- Police : 3 patrouilles. A : la rue ouest ; B : la boucle nord ; C : garde de la sortie ----
-    G.addCop(G.makeCop(), [16, 18.5], 0, [[16, 18.5], [22, 18.5], [29, 18.5], [22, 18.5]]);   // la ronde s'arrête avant l'entrée de la boucle nord (x=35) : on peut s'y glisser
+    G.addCop(G.makeCop(), [26, 18.5], 0, [[26, 18.5], [32, 18.5], [26, 18.5]]);   // la ronde s'arrête avant l'entrée de la boucle nord (x=35) : on peut s'y glisser
     G.addCop(G.makeCop(), [37, 7.5], 0, [[37, 7.5], [45, 7.5]]);
     G.addCop(G.makeCop(), [47.5, 18.5], -Math.PI / 2, null);
     G.buildNavGrid(0, 64, 0, 36, 0.5);

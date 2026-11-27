@@ -105,8 +105,8 @@
   function perceive(c, dt) {
     const P = G.P, dx = P.pos.x - c.x, dz = P.pos.z - c.z, dist = Math.hypot(dx, dz);
     const crouched = P.h < 1.5, hidden = !!G.hidden;
-    const lf = G.clamp(0.45 + G.lightAt(P.pos.x, P.pos.y + 1, P.pos.z, c.lamp) * 0.85, 0.45, 1.4);        // dans le noir on est moins visible, près d'une flamme on l'est plus
-    const range = 20 * (c.keen || 1) * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
+    const lf = G.clamp(0.45 + G.lightAt(P.pos.x, P.pos.y + 1, P.pos.z, c.lamp) * 0.85, 0.45, 1.25);        // dans le noir on est moins visible, près d'une flamme on l'est plus
+    const range = 17 * (c.keen || 1) * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
     const dot = dist > 0.01 ? (dx * Math.sin(c.facing) + dz * Math.cos(c.facing)) / dist : 1;
     const e = [P.pos.x, P.pos.y + (crouched ? 0.7 : 1.2), P.pos.z];
     const sees = !G.arrest && !hidden && dist < range && (dist < (crouched ? 1.8 : 3) || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));

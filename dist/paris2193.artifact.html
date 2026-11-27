@@ -5936,8 +5936,8 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   function perceive(c, dt) {
     const P = G.P, dx = P.pos.x - c.x, dz = P.pos.z - c.z, dist = Math.hypot(dx, dz);
     const crouched = P.h < 1.5, hidden = !!G.hidden;
-    const lf = G.clamp(0.45 + G.lightAt(P.pos.x, P.pos.y + 1, P.pos.z, c.lamp) * 0.85, 0.45, 1.4);        // dans le noir on est moins visible, près d'une flamme on l'est plus
-    const range = 20 * (c.keen || 1) * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
+    const lf = G.clamp(0.45 + G.lightAt(P.pos.x, P.pos.y + 1, P.pos.z, c.lamp) * 0.85, 0.45, 1.25);        // dans le noir on est moins visible, près d'une flamme on l'est plus
+    const range = 17 * (c.keen || 1) * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
     const dot = dist > 0.01 ? (dx * Math.sin(c.facing) + dz * Math.cos(c.facing)) / dist : 1;
     const e = [P.pos.x, P.pos.y + (crouched ? 0.7 : 1.2), P.pos.z];
     const sees = !G.arrest && !hidden && dist < range && (dist < (crouched ? 1.8 : 3) || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));
@@ -7120,7 +7120,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       use() { if (state.phase < 2) { say('Pas sans la clé.', 2000); return; } G.completeChapter(2); } });
 
     // ---- Police : 3 patrouilles. A : la rue ouest ; B : la boucle nord ; C : garde de la sortie ----
-    G.addCop(G.makeCop(), [16, 18.5], 0, [[16, 18.5], [22, 18.5], [29, 18.5], [22, 18.5]]);   // la ronde s'arrête avant l'entrée de la boucle nord (x=35) : on peut s'y glisser
+    G.addCop(G.makeCop(), [26, 18.5], 0, [[26, 18.5], [32, 18.5], [26, 18.5]]);   // la ronde s'arrête avant l'entrée de la boucle nord (x=35) : on peut s'y glisser
     G.addCop(G.makeCop(), [37, 7.5], 0, [[37, 7.5], [45, 7.5]]);
     G.addCop(G.makeCop(), [47.5, 18.5], -Math.PI / 2, null);
     G.buildNavGrid(0, 64, 0, 36, 0.5);
