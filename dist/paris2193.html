@@ -6921,7 +6921,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     const sc = G.scene; sc.traverse(o => { if (o.geometry) o.geometry.dispose(); });
     for (const c of sc.children.slice()) sc.remove(c);
     G.lamps.length = 0; G.interactables.length = 0; G.animated.length = 0; G.onReset.length = 0; if (G.hides) G.hides.length = 0; if (G.cops) G.cops.length = 0; if (G.triggers) G.triggers.length = 0;
-    if (G.clearParkour) G.clearParkour(); G.killY = undefined; G.drone = null; G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
+    if (G.clearParkour) G.clearParkour(); G.killY = undefined; G.fogOverride = undefined; G.drone = null; G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
   };
   G.buildChapter = function (n) { G.buildBase(); G.chapters[n].build(); G.currentChapter = n; G.limp = G.flag('wounded'); G.chapterLimpStart = G.limp; if (G.resetHealth) G.resetHealth(); };   // la boiterie PERSISTE d'un chapitre à l'autre
   // Passage d'un chapitre à l'autre : fondu au noir, on décharge, on charge, fondu d'ouverture, carte de chapitre
@@ -7148,6 +7148,12 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     // Skyline lointaine (silhouettes sombres, sans collision) : pas un décor de plus, juste la ville qui dort sous la brume
     for (let i = 0; i < 30; i++) { const x = -20 + i * 3.1 + (G.rnd() - 0.5) * 2, z = (i % 2 ? 1 : -1) * (14 + G.rnd() * 22), w = 3 + G.rnd() * 5, h = 14 + G.rnd() * 22; G.B(x - w / 2, x + w / 2, 0, h, z - w / 2, z + w / 2, conc, { collide: false, tile: 4 }); }
     G.endBatch();
+    G.fogOverride = 0.058;                                                                   // sur les toits on doit pouvoir lire le vide : brouillard plus léger
+    // Liserés lumineux (peinture phosphorescente) sur les bords qui donnent sur un saut : on voit où ça s'arrête
+    const edgeMat = new T.MeshBasicMaterial({ color: 0xc9b25a });
+    for (const [x, z0, z1, y] of [[6, -5, 5, 9], [9.6, -5, 5, 9], [20, -5, 5, 9], [26, -5, 5, 9], [46, -5, 5, 15], [52, -5, 5, 15]]) { const m = new T.Mesh(new T.BoxGeometry(0.12, 0.03, z1 - z0), edgeMat); m.position.set(x + (x === 6 || x === 20 || x === 46 ? -0.06 : 0.06), y + 0.07, (z0 + z1) / 2); G.scene.add(m); }
+    // Balises de profondeur : petites lumières rouges au loin, pour ne pas flotter dans le noir
+    for (const [x, z, y] of [[8, -14, 22], [30, 16, 28], [50, -18, 31], [66, 14, 24], [-14, 10, 20]]) { const s = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xff3a2a, blending: T.AdditiveBlending, transparent: true, depthWrite: false, fog: false, opacity: 0.8 })); s.position.set(x, y, z); s.scale.set(1.4, 1.4, 1); G.scene.add(s); }
 
     // ---- Parcours : barre, échelles ----
     G.addBar('z', 22.0, 0, 8.4, 12.2);                                                      // entre R1 (x<20) et R2 (x>26) : pour se balancer
@@ -7715,13 +7721,13 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
 
   // Barre horizontale : axis 'x' (le long de x) ou 'z', centre (x,z), longueur len, hauteur y. Visible : tube de fer + deux consoles.
   G.addBar = function (axis, cx, cz, len, y) {
-    const iron = G.mat.iron, m = new T.Mesh(new T.CylinderGeometry(0.04, 0.04, len, 8), iron); m.position.set(cx, y, cz); if (axis === 'x') m.rotation.z = Math.PI / 2; else m.rotation.x = Math.PI / 2; G.scene.add(m);
+    const iron = new T.MeshPhongMaterial({ color: 0x8a8a7c, shininess: 30, emissive: 0x2a2a22 }), m = new T.Mesh(new T.CylinderGeometry(0.045, 0.045, len, 8), iron); m.position.set(cx, y, cz); if (axis === 'x') m.rotation.z = Math.PI / 2; else m.rotation.x = Math.PI / 2; G.scene.add(m);
     for (const s of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(0.12, 0.12, 0.12), iron); b.position.set(axis === 'x' ? cx + s * len / 2 : cx, y, axis === 'z' ? cz + s * len / 2 : cz); G.scene.add(b); }
     const bar = { axis, cx, cz, len, y }; G.bars.push(bar); return bar;
   };
   // Échelle : base (x,z), de y0 à y1, `out` = direction (unitaire) du mur vers le joueur
   G.addLadder = function (x, z, y0, y1, outx, outz) {
-    const iron = G.mat.iron, h = y1 - y0, g = new T.Group(); g.position.set(x, y0, z); G.scene.add(g);
+    const iron = new T.MeshPhongMaterial({ color: 0x7a7a6c, shininess: 20, emissive: 0x222218 }), h = y1 - y0, g = new T.Group(); g.position.set(x, y0, z); G.scene.add(g);
     const px = -outz, pz = outx;                                                     // perpendiculaire (largeur de l'échelle)
     for (const s of [-0.22, 0.22]) { const r = new T.Mesh(new T.BoxGeometry(0.05, h, 0.05), iron); r.position.set(px * s, h / 2, pz * s); g.add(r); }
     for (let k = 0.3; k < h; k += 0.32) { const r = new T.Mesh(new T.CylinderGeometry(0.02, 0.02, 0.44, 5), iron); r.position.set(0, k, 0); r.rotation.z = Math.PI / 2; r.rotation.y = Math.atan2(pz, px) * -1 + 0; g.add(r); }
@@ -8077,7 +8083,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
     const zone = G.zoneAt(G.P.pos);
-    G.scene.fog.density += ((zone === 'in' ? 0.05 : zone === 'field' ? 0.095 : 0.105) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
+    G.scene.fog.density += ((G.fogOverride !== undefined ? G.fogOverride : zone === 'in' ? 0.05 : zone === 'field' ? 0.095 : 0.105) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
     if (playing) { G.camera.getWorldDirection(fwd); G.audio.update(dt, G.camera.position, fwd, zone, G.P.exert); }
     G.render(time);
   }

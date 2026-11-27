@@ -110,7 +110,7 @@
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
     const zone = G.zoneAt(G.P.pos);
-    G.scene.fog.density += ((zone === 'in' ? 0.05 : zone === 'field' ? 0.095 : 0.105) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
+    G.scene.fog.density += ((G.fogOverride !== undefined ? G.fogOverride : zone === 'in' ? 0.05 : zone === 'field' ? 0.095 : 0.105) - G.scene.fog.density) * Math.min(1, dt * 1.5);   // plus clair dans l'immeuble
     if (playing) { G.camera.getWorldDirection(fwd); G.audio.update(dt, G.camera.position, fwd, zone, G.P.exert); }
     G.render(time);
   }

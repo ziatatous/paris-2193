@@ -11,13 +11,13 @@
 
   // Barre horizontale : axis 'x' (le long de x) ou 'z', centre (x,z), longueur len, hauteur y. Visible : tube de fer + deux consoles.
   G.addBar = function (axis, cx, cz, len, y) {
-    const iron = G.mat.iron, m = new T.Mesh(new T.CylinderGeometry(0.04, 0.04, len, 8), iron); m.position.set(cx, y, cz); if (axis === 'x') m.rotation.z = Math.PI / 2; else m.rotation.x = Math.PI / 2; G.scene.add(m);
+    const iron = new T.MeshPhongMaterial({ color: 0x8a8a7c, shininess: 30, emissive: 0x2a2a22 }), m = new T.Mesh(new T.CylinderGeometry(0.045, 0.045, len, 8), iron); m.position.set(cx, y, cz); if (axis === 'x') m.rotation.z = Math.PI / 2; else m.rotation.x = Math.PI / 2; G.scene.add(m);
     for (const s of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(0.12, 0.12, 0.12), iron); b.position.set(axis === 'x' ? cx + s * len / 2 : cx, y, axis === 'z' ? cz + s * len / 2 : cz); G.scene.add(b); }
     const bar = { axis, cx, cz, len, y }; G.bars.push(bar); return bar;
   };
   // Échelle : base (x,z), de y0 à y1, `out` = direction (unitaire) du mur vers le joueur
   G.addLadder = function (x, z, y0, y1, outx, outz) {
-    const iron = G.mat.iron, h = y1 - y0, g = new T.Group(); g.position.set(x, y0, z); G.scene.add(g);
+    const iron = new T.MeshPhongMaterial({ color: 0x7a7a6c, shininess: 20, emissive: 0x222218 }), h = y1 - y0, g = new T.Group(); g.position.set(x, y0, z); G.scene.add(g);
     const px = -outz, pz = outx;                                                     // perpendiculaire (largeur de l'échelle)
     for (const s of [-0.22, 0.22]) { const r = new T.Mesh(new T.BoxGeometry(0.05, h, 0.05), iron); r.position.set(px * s, h / 2, pz * s); g.add(r); }
     for (let k = 0.3; k < h; k += 0.32) { const r = new T.Mesh(new T.CylinderGeometry(0.02, 0.02, 0.44, 5), iron); r.position.set(0, k, 0); r.rotation.z = Math.PI / 2; r.rotation.y = Math.atan2(pz, px) * -1 + 0; g.add(r); }

@@ -37,6 +37,12 @@
     // Skyline lointaine (silhouettes sombres, sans collision) : pas un décor de plus, juste la ville qui dort sous la brume
     for (let i = 0; i < 30; i++) { const x = -20 + i * 3.1 + (G.rnd() - 0.5) * 2, z = (i % 2 ? 1 : -1) * (14 + G.rnd() * 22), w = 3 + G.rnd() * 5, h = 14 + G.rnd() * 22; G.B(x - w / 2, x + w / 2, 0, h, z - w / 2, z + w / 2, conc, { collide: false, tile: 4 }); }
     G.endBatch();
+    G.fogOverride = 0.058;                                                                   // sur les toits on doit pouvoir lire le vide : brouillard plus léger
+    // Liserés lumineux (peinture phosphorescente) sur les bords qui donnent sur un saut : on voit où ça s'arrête
+    const edgeMat = new T.MeshBasicMaterial({ color: 0xc9b25a });
+    for (const [x, z0, z1, y] of [[6, -5, 5, 9], [9.6, -5, 5, 9], [20, -5, 5, 9], [26, -5, 5, 9], [46, -5, 5, 15], [52, -5, 5, 15]]) { const m = new T.Mesh(new T.BoxGeometry(0.12, 0.03, z1 - z0), edgeMat); m.position.set(x + (x === 6 || x === 20 || x === 46 ? -0.06 : 0.06), y + 0.07, (z0 + z1) / 2); G.scene.add(m); }
+    // Balises de profondeur : petites lumières rouges au loin, pour ne pas flotter dans le noir
+    for (const [x, z, y] of [[8, -14, 22], [30, 16, 28], [50, -18, 31], [66, 14, 24], [-14, 10, 20]]) { const s = new T.Sprite(new T.SpriteMaterial({ map: G.glowTex, color: 0xff3a2a, blending: T.AdditiveBlending, transparent: true, depthWrite: false, fog: false, opacity: 0.8 })); s.position.set(x, y, z); s.scale.set(1.4, 1.4, 1); G.scene.add(s); }
 
     // ---- Parcours : barre, échelles ----
     G.addBar('z', 22.0, 0, 8.4, 12.2);                                                      // entre R1 (x<20) et R2 (x>26) : pour se balancer
