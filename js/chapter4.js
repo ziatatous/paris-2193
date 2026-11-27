@@ -121,7 +121,7 @@
     const P = () => G.P;
 
     // ---- Roman : créé masqué, apparaît à l'échelle d'entrée quand on prend le volant ----
-    const rm = G.makeRoman(); rm.visible = false; const rc = G.addCop(rm, [4.5, 18.5], 0, null); rc.roman = true; rc.speedMul = 0.62; rc.keen = 1.35; rc.frozenLab = true; if (rc.lamp) { rc.lamp.I = 0; rc.lamp.halo = 0; }
+    const rm = G.makeRoman(); rm.visible = false; const rc = G.addCop(rm, [4.5, 18.5], 0, null); rc.roman = true; rc.speedMul = 1.15; rc.keen = 1.35; rc.frozenLab = true; if (rc.lamp) { rc.lamp.I = 0; rc.lamp.halo = 0; }
     rm.traverse(o => { if (o.isSprite) o.visible = false; });
     R.cop = rc; G.roman = rc;
     function spawnRoman() {
