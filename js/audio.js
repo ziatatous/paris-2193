@@ -38,7 +38,7 @@
       }
     }
     if (G.sfx) for (const name of G.sfx.names) if (!buf[name] || !buf[name].length) { const made = G.sfx.make(ac, name); if (made) buf[name] = made; }   // FX par défaut
-    A.buffers = buf; startLoops(); startMusic(); scheduleSiren(40000);
+    A.buffers = buf; startLoops(); startMusic(); scheduleSiren(40000); scheduleAmbientEvents(18000);
   };
   A.suspend = () => { if (ac && ac.state === 'running') { ac.suspend(); if (curMusic) curMusic.pause(); } };
   A.resume = () => { if (ac && ac.state === 'suspended') { ac.resume(); if (curMusic) curMusic.play().catch(() => {}); } };
@@ -76,6 +76,13 @@
       el.addEventListener('ended', () => { g.disconnect(); try { src.disconnect(); } catch (e) {} el.removeAttribute('src'); el.load(); next(); });
       el.play().catch(() => {});
     })();
+  }
+  // Événements d'ambiance rares (hors-champ) : un grincement, un choc sourd au loin. Jamais en pause, jamais pendant une lecture.
+  function scheduleAmbientEvents(delay) {
+    setTimeout(() => {
+      if (ac && ac.state === 'running' && !G.docOpen && G.currentChapter) { const r = Math.random(); play(r < 0.55 ? 'creak' : 'thud', r < 0.55 ? 0.22 : 0.16); }
+      scheduleAmbientEvents(22000 + Math.random() * 30000);
+    }, delay);
   }
   function scheduleSiren(delay) {
     setTimeout(() => { if (buf.siren && buf.siren.length) play('siren', lastZone === 'in' ? 0.3 : 0.7); scheduleSiren(40000 + Math.random() * 50000); }, delay);

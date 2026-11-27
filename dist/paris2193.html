@@ -6152,7 +6152,8 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     if (G.arrest) updateArrest(dt);
     let top = 0;
     for (const c of cops) { if (!c.frozenLab) think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
-    G.alert += (top - G.alert) * Math.min(1, dt * 3);
+    const prevAlert = G.alert; G.alert += (top - G.alert) * Math.min(1, dt * 3);
+    if (prevAlert < 0.6 && G.alert >= 0.6 && (!G.stingCD || performance.now() > G.stingCD)) { G.stingCD = performance.now() + 25000; snd('fx', 'stinger', 0.5); }   // coup sourd : on t'a repéré
   };
 
   G.initCops = function () {
@@ -7928,7 +7929,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       }
     }
     if (G.sfx) for (const name of G.sfx.names) if (!buf[name] || !buf[name].length) { const made = G.sfx.make(ac, name); if (made) buf[name] = made; }   // FX par défaut
-    A.buffers = buf; startLoops(); startMusic(); scheduleSiren(40000);
+    A.buffers = buf; startLoops(); startMusic(); scheduleSiren(40000); scheduleAmbientEvents(18000);
   };
   A.suspend = () => { if (ac && ac.state === 'running') { ac.suspend(); if (curMusic) curMusic.pause(); } };
   A.resume = () => { if (ac && ac.state === 'suspended') { ac.resume(); if (curMusic) curMusic.play().catch(() => {}); } };
@@ -7966,6 +7967,13 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       el.addEventListener('ended', () => { g.disconnect(); try { src.disconnect(); } catch (e) {} el.removeAttribute('src'); el.load(); next(); });
       el.play().catch(() => {});
     })();
+  }
+  // Événements d'ambiance rares (hors-champ) : un grincement, un choc sourd au loin. Jamais en pause, jamais pendant une lecture.
+  function scheduleAmbientEvents(delay) {
+    setTimeout(() => {
+      if (ac && ac.state === 'running' && !G.docOpen && G.currentChapter) { const r = Math.random(); play(r < 0.55 ? 'creak' : 'thud', r < 0.55 ? 0.22 : 0.16); }
+      scheduleAmbientEvents(22000 + Math.random() * 30000);
+    }, delay);
   }
   function scheduleSiren(delay) {
     setTimeout(() => { if (buf.siren && buf.siren.length) play('siren', lastZone === 'in' ? 0.3 : 0.7); scheduleSiren(40000 + Math.random() * 50000); }, delay);

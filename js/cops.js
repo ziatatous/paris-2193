@@ -319,7 +319,8 @@
     if (G.arrest) updateArrest(dt);
     let top = 0;
     for (const c of cops) { if (!c.frozenLab) think(c, dt); animate(c, dt); if (c.state !== 'idle') top = Math.max(top, Math.min(1, c.alert)); }
-    G.alert += (top - G.alert) * Math.min(1, dt * 3);
+    const prevAlert = G.alert; G.alert += (top - G.alert) * Math.min(1, dt * 3);
+    if (prevAlert < 0.6 && G.alert >= 0.6 && (!G.stingCD || performance.now() > G.stingCD)) { G.stingCD = performance.now() + 25000; snd('fx', 'stinger', 0.5); }   // coup sourd : on t'a repéré
   };
 
   G.initCops = function () {
