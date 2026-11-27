@@ -100,6 +100,7 @@
 
     // --- Animations (passement / grimpette) : on ne contrôle plus rien pendant ---
     if (P.anim) { stepAnim(P, dt); snapPrev(); return 0; }
+    if (G.extraMovement && G.extraMovement(P, dt, k, jumpPressed)) { snapPrev(); return 0; }       // barres et échelles (parkour2.js)
 
     // --- Direction voulue (touches PHYSIQUES : ZQSD sur AZERTY = WASD) ---
     let fx = 0, fz = 0;

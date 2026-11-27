@@ -364,7 +364,7 @@
     G.animated.push({ update(dt) {
       const P = G.P, t = performance.now() / 1000; if (!P) return;
       for (const s of sheets) {
-        const baseY = (P.pos.y > 5 ? 9 : 0);
+        const baseY = P.safe ? P.safe.y : 0;
         s.m.position.set(P.pos.x, baseY + s.y, P.pos.z);
         const rep = 3 * s.sc, k = rep / 90, dr = (s.i % 2 ? 1 : -1) * t * 0.012;
         s.m.material.map.offset.set(P.pos.x * k + dr, -P.pos.z * k + t * 0.007 * (s.i + 1));

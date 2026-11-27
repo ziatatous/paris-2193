@@ -106,12 +106,12 @@
     const P = G.P, dx = P.pos.x - c.x, dz = P.pos.z - c.z, dist = Math.hypot(dx, dz);
     const crouched = P.h < 1.5, hidden = !!G.hidden;
     const lf = G.clamp(0.45 + G.lightAt(P.pos.x, P.pos.y + 1, P.pos.z, c.lamp) * 0.85, 0.45, 1.4);        // dans le noir on est moins visible, près d'une flamme on l'est plus
-    const range = 20 * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
+    const range = 20 * (c.keen || 1) * (crouched && P.mode !== 'slide' ? 0.6 : 1) * (P.sprint ? 1.25 : 1) * lf;
     const dot = dist > 0.01 ? (dx * Math.sin(c.facing) + dz * Math.cos(c.facing)) / dist : 1;
     const e = [P.pos.x, P.pos.y + (crouched ? 0.7 : 1.2), P.pos.z];
     const sees = !G.arrest && !hidden && dist < range && (dist < (crouched ? 1.8 : 3) || dot > 0.55) && Math.abs(P.pos.y - c.y) < 2.6 && G.los(c.x, c.y + 1.7, c.z, e[0], e[1], e[2]) && !(crouched && coverBetween(c));
     const noise = P.mode === 'slide' || P.dashT > 0 ? 12 : P.sprint ? 8 : P.mode === 'wallrun' ? 9 : (P.speed > 1 && P.h > 1.5) ? 3 : 1;
-    const hears = !G.arrest && !hidden && !sees && dist < noise && Math.abs(P.pos.y - c.y) < 3;
+    const hears = !G.arrest && !hidden && !sees && dist < noise * (c.keen || 1) && Math.abs(P.pos.y - c.y) < 3;
     if (sees) { c.alert = Math.min(1.5, c.alert + dt * (0.9 + (1 - dist / range) * 1.6)); c.last = [P.pos.x, P.pos.z]; c.lostT = 0; }
     else if (hears) { c.alert = Math.min(1.5, c.alert + dt * 0.55); c.last = [P.pos.x + (Math.random() - 0.5) * 3, P.pos.z + (Math.random() - 0.5) * 3]; }
     else if (c.state !== 'chase') c.alert = Math.max(0, c.alert - dt * 0.18);
@@ -120,6 +120,7 @@
 
   // Avance vers (tx, tz) : en ligne droite si la voie est libre, sinon le long du graphe des ruelles
   function steer(c, tx, tz, speed, dt, force) {
+    if (c.leash) { const l = c.leash; tx = Math.max(l.x0, Math.min(l.x1, tx)); tz = Math.max(l.z0, Math.min(l.z1, tz)); }   // policiers de toit : ils ne quittent pas leur toit
     const dist = Math.hypot(tx - c.x, tz - c.z); let gx = tx, gz = tz;
     const direct = dist < 14 && G.los(c.x, c.y + 1, c.z, tx, c.y + 1, tz);
     if (!direct) {
@@ -140,6 +141,11 @@
   }
   function face(c, tx, tz, dt, rate) { const target = Math.atan2(tx - c.x, tz - c.z); let da = target - c.facing; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283; c.facing += da * Math.min(1, dt * (rate || 4)); c.speed += (0 - c.speed) * Math.min(1, dt * 6); }
 
+  // Roman ne t'arrête pas : il te tue (pas de lutte possible). Fondu au noir, cris, retour au début du chapitre.
+  function romanKill(c) {
+    if (G.dead || G.arrest) return; const P = G.P; G.frozen = true; P.vx = P.vz = 0; snd('fx', 'hit', 1); setTimeout(() => snd('fx', 'pain', 1), 180); setTimeout(() => snd('fx', 'hit', 1), 420);
+    G.say && G.say('— Tu m\'as laissé, Dima.', 1400); if (G.die) G.die();
+  }
   // Tir : touche selon la distance, bien moins si on court / glisse / dash ; une trace lumineuse brève montre la balle
   function shoot(c, dist) {
     const P = G.P; snd('fx', 'shot', 1);
@@ -166,16 +172,16 @@
         if (c.alert >= 0.35) { c.state = 'suspicious'; break; }
         if (c.patrol) {                                                      // patrouille : de point en point, avec une petite pause
           if (c.wait > 0) { c.wait -= dt; face(c, c.x + Math.sin(c.facing), c.z + Math.cos(c.facing), dt); }
-          else { const p = c.patrol[c.pi]; if (steer(c, p[0], p[1], SPEED.patrol, dt) < 1.5) { c.pi = (c.pi + 1) % c.patrol.length; c.wait = 1 + Math.random() * 2.5; } }
+          else { const p = c.patrol[c.pi]; if (steer(c, p[0], p[1], (SPEED.patrol * (c.speedMul || 1)), dt) < 1.5) { c.pi = (c.pi + 1) % c.patrol.length; c.wait = 1 + Math.random() * 2.5; } }
         } else {                                                              // garde : immobile, regarde de gauche à droite
           const d = Math.hypot(c.home[0] - c.x, c.home[1] - c.z);
-          if (d > 1) steer(c, c.home[0], c.home[1], SPEED.investigate, dt); else { c.speed *= 0.9; c.facing += (c.homeFacing + Math.sin(performance.now() / 2200 + c.home[1]) * 0.7 - c.facing) * Math.min(1, dt * 2); }
+          if (d > 1) steer(c, c.home[0], c.home[1], (SPEED.investigate * (c.speedMul || 1)), dt); else { c.speed *= 0.9; c.facing += (c.homeFacing + Math.sin(performance.now() / 2200 + c.home[1]) * 0.7 - c.facing) * Math.min(1, dt * 2); }
         }
         break;
       case 'suspicious':
         if (c.alert >= 1) { c.state = 'chase'; c.shoutT = 1.0; snd('fx', 'cop_alert', 1); G.say && G.say('« Hé ! Toi ! Ne bouge pas ! »', 2500); break; }
         if (c.alert < 0.12) { c.state = 'idle'; break; }
-        if (c.last) { if (Math.hypot(c.last[0] - c.x, c.last[1] - c.z) > 2.5) steer(c, c.last[0], c.last[1], SPEED.investigate, dt); else face(c, c.last[0], c.last[1], dt, 3); }
+        if (c.last) { if (Math.hypot(c.last[0] - c.x, c.last[1] - c.z) > 2.5) steer(c, c.last[0], c.last[1], (SPEED.investigate * (c.speedMul || 1)), dt); else face(c, c.last[0], c.last[1], dt, 3); }
         break;
       case 'chase': {
         const P = G.P; if (pc.sees) c.lostT = 0; else c.lostT += dt;
@@ -188,12 +194,12 @@
           shooting = true; c.aimT += dt; face(c, P.pos.x, P.pos.z, dt, 10); c.fireCD -= dt;
           if (c.aimT > 0.9 && c.fireCD <= 0) { shoot(c, pc.dist); c.ammo--; c.fireCD = 0.7; c.aimT = 0.55; if (c.ammo <= 0) { c.reloadT = 3.5; c.aimT = 0; } }
         } else if (c.armed) c.aimT = Math.max(0, c.aimT - dt * 2);
-        const d = shooting ? (c.speed *= 0.8, 9) : steer(c, tx, tz, SPEED.chase * (c.reloadT > 0 ? 0.7 : 1), dt);
+        const d = shooting ? (c.speed *= 0.8, 9) : steer(c, tx, tz, (SPEED.chase * (c.speedMul || 1)) * (c.reloadT > 0 ? 0.7 : 1), dt);
         if (pc.dist < 1.1 && Math.abs(P.pos.y - c.y) < 1.7 && pc.sees) arrest(c);
         if (c.lostT > 20 || (d < 2.5 && !pc.sees)) { c.state = 'search'; c.searchT = 6; }                  // il court jusqu'à l'endroit où il t'a vu, puis il fouille
         break; }
       case 'search':
-        c.searchT -= dt; if (c.last && Math.hypot(c.last[0] - c.x, c.last[1] - c.z) > 2) steer(c, c.last[0], c.last[1], SPEED.search, dt); else { c.facing += dt * 1.4; c.speed *= 0.9; }
+        c.searchT -= dt; if (c.last && Math.hypot(c.last[0] - c.x, c.last[1] - c.z) > 2) steer(c, c.last[0], c.last[1], (SPEED.search * (c.speedMul || 1)), dt); else { c.facing += dt * 1.4; c.speed *= 0.9; }
         if (c.alert >= 1) c.state = 'chase';
         if (c.searchT <= 0) { c.state = 'idle'; c.alert = 0; }
         break;
@@ -202,7 +208,7 @@
   // Animation : le squelette (places.js, G.makeCop) est animé à la main. Rotation x positive = le haut part vers l'avant, un pied part vers l'arrière.
   function animate(c, dt) {
     const r = c.g.userData.rig, t = performance.now() / 1000 + c.seed, run = c.state === 'chase', sus = c.state === 'suspicious' || c.state === 'search';
-    const f = G.clamp(c.speed / (run ? SPEED.chase : SPEED.investigate), 0, 1);           // 0 = immobile, 1 = pleine allure
+    const f = G.clamp(c.speed / (run ? (SPEED.chase * (c.speedMul || 1)) : (SPEED.investigate * (c.speedMul || 1))), 0, 1);           // 0 = immobile, 1 = pleine allure
     c.phase += c.speed * dt * (run ? 1.25 : 1.7); c.shoutT = Math.max(0, (c.shoutT || 0) - dt);
     const s = Math.sin(c.phase), s2 = Math.sin(c.phase * 2), idle = f < 0.1, amp = (run ? 0.7 : 0.38) * f;
     // Tics nerveux : de temps en temps le corps a un spasme (tête, épaule), plus souvent quand il se méfie
@@ -252,6 +258,7 @@
      3. 'cuff'  : bras tordus dans le dos, menottes, noir, retour au début. */
   function arrest(c) {
     if (G.arrest) return;
+    if (c.roman) { romanKill(c); return; }
     const P = G.P; if (G.hidden) G.hidden.exit();
     const dx = P.pos.x - c.x, dz = P.pos.z - c.z, d = Math.hypot(dx, dz) || 1;
     G.arrest = { stage: 'shove', t: 0, cop: c, dir: [dx / d, dz / d], prog: 0, prevSp: !!G.keys.Space, said: 0, clicked: false };

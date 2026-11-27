@@ -5,7 +5,7 @@ Usage :  python3 build.py
 """
 import base64, os, re
 from manifest import make_manifest
-FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'health', 'building', 'levels', 'story', 'chapter2', 'player', 'sfx', 'audio', 'game']   # même ordre que dans index.html
+FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'health', 'building', 'levels', 'story', 'chapter2', 'chapter3', 'player', 'parkour2', 'sfx', 'audio', 'game']   # même ordre que dans index.html
 html = open('index.html', encoding='utf-8').read()
 bundle = ''.join('<script>\n/* ---- js/%s.js ---- */\n%s\n</script>\n' % (f, open('js/%s.js' % f, encoding='utf-8').read()) for f in FILES)
 assert '<!--BUNDLE-->' in html

@@ -98,13 +98,14 @@
       if (d < it.radius && to.normalize().dot(fwd) > 0.82 && d < bd) { best = it; bd = d; }
     }
     G.focus = best;
-    const pr = el('prompt'); pr.textContent = best ? '[E]  ' + best.prompt : ''; pr.style.opacity = best ? 1 : 0;
+    const lp = !best && G.ladderPrompt ? G.ladderPrompt(G.P) : null;
+    const pr = el('prompt'); pr.textContent = best ? '[E]  ' + best.prompt : lp ? '[E]  ' + lp : ''; pr.style.opacity = (best || lp) ? 1 : 0;
   }
 
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = G.clamp((now - last) / 1000, 0, 0.05); last = now; time += dt;   // jamais négatif ni trop grand
-    if (playing && !G.docOpen) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); if (G.updateTriggers) G.updateTriggers(); if (G.updateHealth) G.updateHealth(dt); updateInteract(); }
+    if (playing && !G.docOpen) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); if (G.updateTriggers) G.updateTriggers(); if (G.updateHealth) G.updateHealth(dt); if (G.killY !== undefined && G.P.pos.y < G.killY && !G.dead && !G.completed && G.die) G.die(); updateInteract(); }
     G.updateCamera(dt, time);
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
