@@ -19,7 +19,8 @@ const { launch } = require('./harness');
     { const v = G.interactables.find(i => i.id === 'vanne'); out.vanneReachEast = Math.hypot(P.pos.x - v.pos.x, P.pos.z - v.pos.z) < v.radius; }          // la vanne doit être utilisable depuis l'est (vraie portée d'interaction)
     G.roman.x = 25; G.roman.z = 18.5;                                          // Roman est loin derrière : on peut refermer
     use('vanne'); step(100); out.gateClosed = G.colliders.some(c => c.minX === 35 && c.maxX === 35.3 && c.minY === 0);
-    await sleep(12600); step(10); out.romanAtVent = Math.hypot(G.roman.x - 36.5, G.roman.z - 9.6) < 8;
+    out.dbgBefore = { rx: +G.roman.x.toFixed(1), rz: +G.roman.z.toFixed(1), st: G.roman.state, px: +P.pos.x.toFixed(1), pz: +P.pos.z.toFixed(1), dead: G.dead, frozen: G.frozen, ep: G.epoch };
+    await sleep(12600); step(10); out.dbgAfter = { rx: +G.roman.x.toFixed(1), rz: +G.roman.z.toFixed(1), st: G.roman.state, px: +P.pos.x.toFixed(1), pz: +P.pos.z.toFixed(1), dead: G.dead, ep: G.epoch }; out.romanAtVent = Math.hypot(G.roman.x - 36.5, G.roman.z - 9.6) < 8;
     G.roman.frozenLab = true;                                                   // le bot ne teste pas ici la poursuite
     out.toGarage = walk([[40, 18.5], [45, 18.5], [50, 18.5], [54, 18.5], [57.5, 18.5], [59, 20]]); step(30);
     out.safe = G.triggers.some(t => t.done); out.garageDoorShut = G.colliders.some(c => c.minX === 55 && c.maxX === 55.3 && c.minY === 0);
