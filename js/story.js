@@ -10,7 +10,7 @@
     try {
       const raw = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!raw || typeof raw !== 'object') return;
       const c = Number(raw.chapter); if (Number.isInteger(c) && c >= 1 && c <= 4) G.save.chapter = c;
-      if (Array.isArray(raw.collect)) G.save.collect = raw.collect.filter(x => typeof x === 'string' && ID.test(x)).slice(0, 64);
+      if (Array.isArray(raw.collect)) G.save.collect = [...new Set(raw.collect.filter(x => typeof x === 'string' && ID.test(x)))].slice(0, 64);
       if (raw.flags && typeof raw.flags === 'object') for (const k of Object.keys(raw.flags)) if (k !== '__proto__' && ID.test(k) && typeof raw.flags[k] === 'boolean') G.save.flags[k] = raw.flags[k];
       const d = Number(raw.deaths); if (Number.isInteger(d) && d >= 0 && d < 1e6) G.save.deaths = d;
     } catch (e) { /* sauvegarde illisible : on repart de zéro */ }
@@ -61,7 +61,12 @@
   G.addTrigger = function (test, fire) { const t = { test, fire, done: false }; G.triggers.push(t); G.onReset.push(() => { t.done = false; if (t.reset) t.reset(); }); return t; };
   G.updateTriggers = function () { for (const t of G.triggers) if (!t.done && t.test(G.P)) { t.done = true; t.fire(); } };
   G.clearZone = function () {                                    // vide tout ce qui appartient au chapitre en cours
-    const sc = G.scene; sc.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    const sc = G.scene, shared = new Set(Object.values(G.mat || {})), done = new Set();
+    sc.traverse(o => {                                                     // libère la mémoire graphique du chapitre (les matières communes G.mat restent)
+      if (o.geometry) o.geometry.dispose();
+      const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      for (const m of ms) { if (shared.has(m) || done.has(m)) continue; done.add(m); if (m.map) m.map.dispose(); m.dispose(); }
+    });
     for (const c of sc.children.slice()) sc.remove(c);
     G.lamps.length = 0; G.interactables.length = 0; G.animated.length = 0; G.onReset.length = 0; if (G.hides) G.hides.length = 0; if (G.cops) G.cops.length = 0; if (G.triggers) G.triggers.length = 0;
     if (G.clearParkour) G.clearParkour(); G.killY = undefined; G.fogOverride = undefined; G.drone = null; G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();

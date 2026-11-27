@@ -16,6 +16,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):                       # pas de cache : un nouveau fichier est pris en compte tout de suite
         self.send_header('Cache-Control', 'no-store'); super().end_headers()
     def log_message(self, *a): pass
+    def do_GET(self):                                  # refuse les requêtes dont l'en-tête Host n'est pas local (anti DNS-rebinding)
+        if self.headers.get('Host', '').split(':')[0] not in ('localhost', '127.0.0.1'):
+            self.send_error(403); return
+        super().do_GET()
 
 socketserver.TCPServer.allow_reuse_address = True
 for port in range(8000, 8010):

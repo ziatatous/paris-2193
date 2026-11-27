@@ -5225,6 +5225,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       let buf = null;
       if (window.COP_GLB_B64) { const bin = atob(window.COP_GLB_B64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); buf = u.buffer; }
       else { if (location.protocol === 'file:') return; const r = await fetch('assets/models/cop.glb'); if (!r.ok) return; buf = await r.arrayBuffer(); }
+      if (!buf || buf.byteLength > 20e6) return;                                   // fichier absent ou démesuré : on garde le corps fait main
       const gltf = await new Promise((ok, ko) => new T.GLTFLoader().parse(buf, '', ok, ko));
       const probe = analyse(gltf.scene.clone(true));      // essai : il faut au moins les os principaux
       if (!probe) { console.warn('[cop.glb] os non reconnus : corps fait main conservé'); return; }
@@ -6866,7 +6867,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     try {
       const raw = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!raw || typeof raw !== 'object') return;
       const c = Number(raw.chapter); if (Number.isInteger(c) && c >= 1 && c <= 4) G.save.chapter = c;
-      if (Array.isArray(raw.collect)) G.save.collect = raw.collect.filter(x => typeof x === 'string' && ID.test(x)).slice(0, 64);
+      if (Array.isArray(raw.collect)) G.save.collect = [...new Set(raw.collect.filter(x => typeof x === 'string' && ID.test(x)))].slice(0, 64);
       if (raw.flags && typeof raw.flags === 'object') for (const k of Object.keys(raw.flags)) if (k !== '__proto__' && ID.test(k) && typeof raw.flags[k] === 'boolean') G.save.flags[k] = raw.flags[k];
       const d = Number(raw.deaths); if (Number.isInteger(d) && d >= 0 && d < 1e6) G.save.deaths = d;
     } catch (e) { /* sauvegarde illisible : on repart de zéro */ }
@@ -6917,7 +6918,12 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   G.addTrigger = function (test, fire) { const t = { test, fire, done: false }; G.triggers.push(t); G.onReset.push(() => { t.done = false; if (t.reset) t.reset(); }); return t; };
   G.updateTriggers = function () { for (const t of G.triggers) if (!t.done && t.test(G.P)) { t.done = true; t.fire(); } };
   G.clearZone = function () {                                    // vide tout ce qui appartient au chapitre en cours
-    const sc = G.scene; sc.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    const sc = G.scene, shared = new Set(Object.values(G.mat || {})), done = new Set();
+    sc.traverse(o => {                                                     // libère la mémoire graphique du chapitre (les matières communes G.mat restent)
+      if (o.geometry) o.geometry.dispose();
+      const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      for (const m of ms) { if (shared.has(m) || done.has(m)) continue; done.add(m); if (m.map) m.map.dispose(); m.dispose(); }
+    });
     for (const c of sc.children.slice()) sc.remove(c);
     G.lamps.length = 0; G.interactables.length = 0; G.animated.length = 0; G.onReset.length = 0; if (G.hides) G.hides.length = 0; if (G.cops) G.cops.length = 0; if (G.triggers) G.triggers.length = 0;
     if (G.clearParkour) G.clearParkour(); G.killY = undefined; G.fogOverride = undefined; G.drone = null; G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
@@ -7889,7 +7895,10 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     fxBus = ac.createGain(); fxBus.gain.value = G.settings.fx; fxBus.connect(master);
     A.footstep = footstep; A.thud = land; A.jump = jump; A.flick = pickup; A.update = update; A.fx = (folder, vol) => play(folder, vol);
     if (location.protocol === 'file:') console.info('[audio] page ouverte en double-clic : le navigateur bloque les fichiers sons. Lance jouer.bat (ou python3 serve.py), voir audio/README.md.');
-    else { try { const r = await fetch('audio/manifest.json', { cache: 'no-store' }); if (r.ok) manifest = await r.json(); } catch (e) { /* pas de sons : silence */ } }
+    else { try { const r = await fetch('audio/manifest.json', { cache: 'no-store' }); if (r.ok) {            // manifeste validé : forme + chemins sûrs (jamais de confiance au fichier)
+        const m = await r.json(), ok = u => typeof u === 'string' && /^audio\/[\w\/. -]+\.(ogg|mp3|wav|m4a|flac|opus)$/i.test(u) && !u.includes('..');
+        manifest = { music: Array.isArray(m && m.music) ? m.music.filter(ok) : [], fx: {} };
+        if (m && m.fx && typeof m.fx === 'object') for (const k of Object.keys(m.fx)) if (/^\w+$/.test(k) && Array.isArray(m.fx[k])) manifest.fx[k] = m.fx[k].filter(ok); } } catch (e) { /* pas de sons : silence */ } }
     for (const folder in manifest.fx || {}) {            // charge et décode chaque fichier de chaque dossier
       buf[folder] = [];
       for (const url of manifest.fx[folder]) {
@@ -7931,9 +7940,9 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     let i = 0;
     (function next() {
       const el = new Audio(); el.crossOrigin = 'anonymous'; el.src = tracks[i++ % tracks.length]; curMusic = el;
-      const g = ac.createGain(); g.gain.value = 0; ac.createMediaElementSource(el).connect(g); g.connect(musicBus);
+      const g = ac.createGain(); g.gain.value = 0; const src = ac.createMediaElementSource(el); src.connect(g); g.connect(musicBus);
       g.gain.linearRampToValueAtTime(1, ac.currentTime + 4);
-      el.addEventListener('ended', () => { g.disconnect(); next(); });
+      el.addEventListener('ended', () => { g.disconnect(); try { src.disconnect(); } catch (e) {} el.removeAttribute('src'); el.load(); next(); });
       el.play().catch(() => {});
     })();
   }

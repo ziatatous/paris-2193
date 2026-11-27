@@ -26,7 +26,10 @@
     fxBus = ac.createGain(); fxBus.gain.value = G.settings.fx; fxBus.connect(master);
     A.footstep = footstep; A.thud = land; A.jump = jump; A.flick = pickup; A.update = update; A.fx = (folder, vol) => play(folder, vol);
     if (location.protocol === 'file:') console.info('[audio] page ouverte en double-clic : le navigateur bloque les fichiers sons. Lance jouer.bat (ou python3 serve.py), voir audio/README.md.');
-    else { try { const r = await fetch('audio/manifest.json', { cache: 'no-store' }); if (r.ok) manifest = await r.json(); } catch (e) { /* pas de sons : silence */ } }
+    else { try { const r = await fetch('audio/manifest.json', { cache: 'no-store' }); if (r.ok) {            // manifeste validé : forme + chemins sûrs (jamais de confiance au fichier)
+        const m = await r.json(), ok = u => typeof u === 'string' && /^audio\/[\w\/. -]+\.(ogg|mp3|wav|m4a|flac|opus)$/i.test(u) && !u.includes('..');
+        manifest = { music: Array.isArray(m && m.music) ? m.music.filter(ok) : [], fx: {} };
+        if (m && m.fx && typeof m.fx === 'object') for (const k of Object.keys(m.fx)) if (/^\w+$/.test(k) && Array.isArray(m.fx[k])) manifest.fx[k] = m.fx[k].filter(ok); } } catch (e) { /* pas de sons : silence */ } }
     for (const folder in manifest.fx || {}) {            // charge et décode chaque fichier de chaque dossier
       buf[folder] = [];
       for (const url of manifest.fx[folder]) {
@@ -68,9 +71,9 @@
     let i = 0;
     (function next() {
       const el = new Audio(); el.crossOrigin = 'anonymous'; el.src = tracks[i++ % tracks.length]; curMusic = el;
-      const g = ac.createGain(); g.gain.value = 0; ac.createMediaElementSource(el).connect(g); g.connect(musicBus);
+      const g = ac.createGain(); g.gain.value = 0; const src = ac.createMediaElementSource(el); src.connect(g); g.connect(musicBus);
       g.gain.linearRampToValueAtTime(1, ac.currentTime + 4);
-      el.addEventListener('ended', () => { g.disconnect(); next(); });
+      el.addEventListener('ended', () => { g.disconnect(); try { src.disconnect(); } catch (e) {} el.removeAttribute('src'); el.load(); next(); });
       el.play().catch(() => {});
     })();
   }

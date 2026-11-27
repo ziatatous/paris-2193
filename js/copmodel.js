@@ -36,6 +36,7 @@
       let buf = null;
       if (window.COP_GLB_B64) { const bin = atob(window.COP_GLB_B64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); buf = u.buffer; }
       else { if (location.protocol === 'file:') return; const r = await fetch('assets/models/cop.glb'); if (!r.ok) return; buf = await r.arrayBuffer(); }
+      if (!buf || buf.byteLength > 20e6) return;                                   // fichier absent ou démesuré : on garde le corps fait main
       const gltf = await new Promise((ok, ko) => new T.GLTFLoader().parse(buf, '', ok, ko));
       const probe = analyse(gltf.scene.clone(true));      // essai : il faut au moins les os principaux
       if (!probe) { console.warn('[cop.glb] os non reconnus : corps fait main conservé'); return; }
