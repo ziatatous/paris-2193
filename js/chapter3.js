@@ -104,6 +104,7 @@
       else { const tx = 8 + 26 * (0.5 + 0.5 * Math.sin(D.t * 0.22)), tz = 3.2 * Math.sin(D.t * 0.7); D.x += (tx - D.x) * Math.min(1, dt * 1.5); D.z += (tz - D.z) * Math.min(1, dt * 1.5); }
       g.position.set(D.x, D.y + Math.sin(D.t * 2) * 0.05, D.z); pool.position.set(D.x, 9.07, D.z); lamp.pos.set(D.x, 11.5, D.z);
       // détection : dans le disque lumineux, à hauteur de toit, ligne de vue dégagée vers le haut, pas caché
+      if (G.docOpen || G.dead || G.frozen) return;
       const dxp = P.pos.x - D.x, dzp = P.pos.z - D.z, inDisk = Math.hypot(dxp, dzp) < 3.0 && Math.abs(P.pos.y - 9) < 2.2 && !G.hidden;
       if (inDisk && G.los(D.x, D.y - 0.2, D.z, P.pos.x, P.pos.y + (P.h < 1.5 ? 0.7 : 1.3), P.pos.z)) {
         D.track = 6; if (D.cd <= 0) { D.cd = 4; fx('whistle', 0.9); fx('stinger', 0.5); say('Le drone t\'a vu. Les flics sont prévenus.', 2800);

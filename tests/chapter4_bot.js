@@ -16,6 +16,7 @@ const { launch } = require('./harness');
     out.toGate = walk([[18, 12], [18.5, 18.5], [26, 18.5], [33.5, 18.5]]);
     use('vanne'); step(60); out.gateOpened = !G.colliders.some(c => c.minX === 35 && c.maxX === 35.3 && c.maxY < 50 && c.minY < 50);
     out.pastGate = walk([[36, 18.6], [37.4, 18.6]]); out.pastGateX = +P.pos.x.toFixed(1);
+    { const v = G.interactables.find(i => i.id === 'vanne'); out.vanneReachEast = Math.hypot(P.pos.x - v.pos.x, P.pos.z - v.pos.z) < v.radius; }          // la vanne doit être utilisable depuis l'est (vraie portée d'interaction)
     G.roman.x = 25; G.roman.z = 18.5;                                          // Roman est loin derrière : on peut refermer
     use('vanne'); step(100); out.gateClosed = G.colliders.some(c => c.minX === 35 && c.maxX === 35.3 && c.minY === 0);
     await sleep(12600); step(10); out.romanAtVent = Math.hypot(G.roman.x - 36.5, G.roman.z - 9.6) < 8;
@@ -26,6 +27,6 @@ const { launch } = require('./harness');
     return out;
   });
   console.log(JSON.stringify(r)); console.log('erreurs:', g.errors.length ? g.errors : 'aucune');
-  const ok = r.romanHidden && r.toWheelRoom && r.haveWheel && r.romanActive && r.toGate && r.gateOpened && r.pastGate && r.pastGateX > 36.5 && r.gateClosed && r.romanAtVent && r.toGarage && r.safe && r.garageDoorShut && r.blockedBeforeTalk && r.endingB && !g.errors.length;
+  const ok = r.romanHidden && r.toWheelRoom && r.haveWheel && r.romanActive && r.toGate && r.gateOpened && r.pastGate && r.pastGateX > 36.5 && r.gateClosed && r.vanneReachEast && r.romanAtVent && r.toGarage && r.safe && r.garageDoorShut && r.blockedBeforeTalk && r.endingB && !g.errors.length;
   console.log(ok ? 'CHAPITRE 4 : OK' : 'CHAPITRE 4 : ÉCHEC'); await g.close(); process.exit(ok ? 0 : 1);
 })();

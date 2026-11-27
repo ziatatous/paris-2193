@@ -62,7 +62,7 @@
       const b = nearBar(P);
       if (b) {
         const perp = b.axis === 'x' ? 'z' : 'x', v = perp === 'z' ? P.vz : P.vx, off = (perp === 'z' ? p.z - b.cz : p.x - b.cx);
-        P.mode = 'swing'; P.swing = { bar: b, th: Math.max(-0.5, Math.min(0.5, Math.asin(Math.max(-1, Math.min(1, off / L))))), av: Math.max(-4, Math.min(4, v / L)) };
+        P.dashT = 0; P.mode = 'swing'; P.swing = { bar: b, th: Math.max(-0.5, Math.min(0.5, Math.asin(Math.max(-1, Math.min(1, off / L))))), av: Math.max(-4, Math.min(4, v / L)) };
         const f = G.audio && G.audio.fx; if (f) f('thud', 0.5); G.say('', 1); return true;
       }
     }
@@ -80,7 +80,7 @@
       for (const Ld of G.ladders) {
         const bx = Ld.x + Ld.outx * 0.5, bz = Ld.z + Ld.outz * 0.5;
         if (Math.hypot(p.x - bx, p.z - bz) < 1.3 && p.y > Ld.y0 - 0.4 && p.y < Ld.y0 + 1.2) {
-          P.mode = 'ladder'; P.ladder = Ld; p.set(bx, Math.max(p.y, Ld.y0), bz); P.yaw = Math.atan2(Ld.outx, Ld.outz); P.pitch = 0.3; return true;     // face au mur
+          P.dashT = 0; P.mode = 'ladder'; P.ladder = Ld; p.set(bx, Math.max(p.y, Ld.y0), bz); P.yaw = Math.atan2(Ld.outx, Ld.outz); P.pitch = 0.3; return true;     // face au mur
         }
       }
     }

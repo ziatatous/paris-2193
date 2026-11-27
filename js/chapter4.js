@@ -105,14 +105,14 @@
     G.animated.push({ update(dt) { if (gst.y !== gst.target) { gst.y += Math.sign(gst.target - gst.y) * Math.min(Math.abs(gst.target - gst.y), dt * 1.1); gate.position.y = gst.y * 2.6; } } });
     const valveBase = new T.Mesh(new T.CylinderGeometry(0.06, 0.06, 0.9, 8), M().iron); valveBase.position.set(34.2, 1.0, 17.5); valveBase.rotation.x = Math.PI / 2; valveBase.position.z = 17.4; G.scene.add(valveBase);
     const valveWheel = new T.Mesh(new T.TorusGeometry(0.22, 0.03, 6, 16), L().ph(0x4a2a1c, 20)); valveWheel.position.set(34.2, 1.0, 17.9); valveWheel.visible = false; G.scene.add(valveWheel);
-    const valve = { id: 'vanne', pos: new T.Vector3(34.2, 1.0, 17.9), radius: 2.2, prompt: 'Vanne',
+    const valve = { id: 'vanne', pos: new T.Vector3(35.2, 1.0, 17.7), radius: 2.7, prompt: 'Vanne',
       use() {
         if (!R.wheel) { say('Une vanne sans volant. Il en faut un.', 2500); return; }
         valveWheel.visible = true;
         if (!R.gateOpen) { R.gateOpen = true; gst.target = 1; gateCol.minY = 99; gateCol.maxY = 100; fx('door', 0.9); fx('creak', 0.8); G.later(rebuildNav, 1200); G.objective = 'La grille s\'ouvre. Passe. Tu peux la refermer derrière toi.'; say('La grille remonte en grinçant.', 3000); valve.prompt = 'Refermer la grille'; }
         else if (!R.gateClosed) {
           const rc = R.cop; if (rc && R.active && Math.hypot(rc.x - 35.2, rc.z - 19) < 2.2) { say('Il est trop près. Impossible de la refermer.', 2500); return; }
-          if (P().pos.x < 36.5) { say('Il faut être de l\'autre côté.', 2200); return; }
+          if (P().pos.x < 35.8) { say('Il faut être de l\'autre côté.', 2200); return; }
           R.gateClosed = true; gst.target = 0; gateCol.minY = 0; gateCol.maxY = 2.7; fx('door', 1); G.later(rebuildNav, 3000); valve.prompt = '…'; say('La grille se referme. Tiens bon.', 3000); G.objective = 'Il va chercher un autre chemin. Rejoins le garage.';
           G.later(() => ventScare(), 12000);
         }
@@ -129,7 +129,7 @@
       say('Des pas lourds, sur l\'échelle. Il descend.', 3500);
     }
     function ventScare() {                                                    // il revient par le conduit nord de la citerne
-      if (R.ventDone || G.currentChapter !== 4 || !R.active) return; R.ventDone = true; fx('thud', 1); fx('creak', 0.9);
+      if (R.ventDone || R.safe || G.currentChapter !== 4 || !R.active) return; R.ventDone = true; fx('thud', 1); fx('creak', 0.9);
       rc.x = 36.5; rc.z = 9.6; rc.state = 'search'; rc.alert = 0.9; rc.last = [P().pos.x, P().pos.z]; rc.searchT = 60; say('Un fracas dans le conduit, au nord. Il a contourné la grille.', 3500);
     }
     G.animated.push({ t: 0, update(dt) {                                       // il sait toujours à peu près où tu es (le bruit des pas dans les tuyaux), sauf si tu es caché
@@ -143,7 +143,7 @@
     G.animated.push({ update(dt) { if (Math.abs(dst.y - dst.target) > 0.001) { dst.y += Math.sign(dst.target - dst.y) * Math.min(Math.abs(dst.target - dst.y), dt * 2.4); door.position.y = dst.y; } } });
     const trSafe = G.addTrigger(p => p.pos.x > 56.2 && p.pos.x < 62.5 && p.pos.z > 15.5 && p.pos.z < 22.5, () => {
       R.safe = true; dst.target = 1.5; doorCol = G.addBoxCollider(55.0, 55.3, 0, 3.0, 18, 20); fx('door', 1); G.later(() => fx('thud', 1), 500); G.later(() => fx('thud', 0.9), 1300); G.later(() => fx('thud', 0.7), 2400);
-      if (R.cop) R.cop.frozenLab = true; G.objective = 'La porte s\'est refermée. Léna est là.'; say('Derrière la porte, quelqu\'un cogne. Puis plus rien. Tu es en sécurité.', 5000);
+      if (R.cop) { R.cop.frozenLab = true; R.cop.state = 'idle'; R.cop.alert = 0; R.cop.speed = 0; } rm.visible = false; G.alert = 0; G.objective = 'La porte s\'est refermée. Léna est là.'; say('Derrière la porte, quelqu\'un cogne. Puis plus rien. Tu es en sécurité.', 5000);
       G.later(() => say('LÉNA : « Dima. On t\'attendait. Elle va bien. Elle est dans la voiture. »', 5500), 5500);
     });
     trSafe.reset = () => { R.safe = false; dst.target = dst.y = 4.5; door.position.y = 4.5; if (doorCol) { doorCol.minY = 99; doorCol.maxY = 100; } };

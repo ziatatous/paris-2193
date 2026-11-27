@@ -19,7 +19,7 @@
   G.moveScale = function () { return G.painT > 0 ? 0.55 : (G.limp ? 0.92 : 1); };
   G.hurt = function (from) {
     if (G.arrest || G.dead || G.completed || G.frozen) return;
-    G.wounds++;
+    if (G.hurtCD > 0) return; G.hurtCD = 0.6; G.wounds++;
     const P = G.P, f = G.audio && G.audio.fx;
     if (f) { f('hit', 1); setTimeout(() => f('pain', 0.9), 120); }
     if (G.wounds >= 2) { G.die(); return; }
@@ -35,6 +35,7 @@
     setTimeout(() => { G.dead = false; G.wounds = 0; G.painT = 0; G.limp = !!G.chapterLimpStart; if (G.flag) G.flag('wounded', G.limp); overlay().style.opacity = 0; (G.resetLevel || function () {})(); }, 900);
   };
   G.updateHealth = function (dt) {
+    if (G.hurtCD > 0) G.hurtCD -= dt;
     if (G.painT > 0) { G.painT -= dt; if (G.painT <= 0 && ov) ov.style.opacity = 0.35; }             // la douleur retombe, un voile reste
   };
   G.resetHealth = function () { G.wounds = 0; G.painT = 0; if (ov) ov.style.opacity = 0; };

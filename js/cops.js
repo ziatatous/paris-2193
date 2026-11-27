@@ -157,6 +157,7 @@
     if (hit && G.hurt) G.hurt(c);
   }
   function think(c, dt) {
+    if (c.state !== 'chase') c.aimT = 0;                                  // la visée repart de zéro à chaque nouvelle poursuite
     if (G.arrest) { if (G.arrest.cop !== c) c.speed *= 0.9; return; }
     if (c.staggerT > 0) { c.staggerT -= dt; c.speed *= 0.85; return; }
     const pc = perceive(c, dt);
