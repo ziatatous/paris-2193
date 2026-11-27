@@ -410,7 +410,7 @@
   G.resetLevel = function () {                                     // arrestation / mort : retour instantané au début du chapitre (l'histoire et les objets trouvés sont conservés)
     G.placeStart(); const P = G.P;
     P.safe.copy(P.pos); P.stunT = 0; P.wallUsed = false; P.dashT = 0; P.dashAir = false; P.slideT = 0; P.coyote = 0;
-    G.have = []; G.hidden = null; slit(false); G.arrest = null; G.frozen = false; G.alert = 0; G.completed = false; G.resetCops();
+    G.have = []; G.hidden = null; slit(false); G.arrest = null; G.frozen = false; G.alert = 0; G.completed = false; G.resetCops(); if (G.resetHealth) G.resetHealth();
     if (G.save) { G.save.deaths++; G.writeSave(); }
     for (const h of G.hides) if (h.anim) h.anim(true);
     for (const fn of G.onReset) fn();

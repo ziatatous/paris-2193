@@ -5969,6 +5969,16 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   }
   function face(c, tx, tz, dt, rate) { const target = Math.atan2(tx - c.x, tz - c.z); let da = target - c.facing; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283; c.facing += da * Math.min(1, dt * (rate || 4)); c.speed += (0 - c.speed) * Math.min(1, dt * 6); }
 
+  // Tir : touche selon la distance, bien moins si on court / glisse / dash ; une trace lumineuse brève montre la balle
+  function shoot(c, dist) {
+    const P = G.P; snd('fx', 'shot', 1);
+    const moving = P.sprint || P.mode === 'slide' || P.dashT > 0 || P.mode === 'wallrun' || P.mode === 'roll';
+    let p = 0.8 - Math.min(0.5, dist / 40); if (moving) p *= 0.45; if (P.h < 1.5) p *= 0.7; p *= G.shotLuck ? G.shotLuck : 1;
+    const hit = Math.random() < p, tx = P.pos.x + (hit ? 0 : (Math.random() - 0.5) * 1.6), tz = P.pos.z + (hit ? 0 : (Math.random() - 0.5) * 1.6), ty = P.pos.y + 1.1;
+    const sx = c.x + Math.sin(c.facing) * 0.5, sz = c.z + Math.cos(c.facing) * 0.5, g = new T.BufferGeometry().setFromPoints([new T.Vector3(sx, c.y + 1.45, sz), new T.Vector3(tx, ty, tz)]);
+    const ln = new T.Line(g, new T.LineBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0.9, blending: T.AdditiveBlending, fog: false })); G.scene.add(ln); setTimeout(() => { G.scene.remove(ln); g.dispose(); }, 70);
+    if (hit && G.hurt) G.hurt(c);
+  }
   function think(c, dt) {
     if (G.arrest) { if (G.arrest.cop !== c) c.speed *= 0.9; return; }
     if (c.staggerT > 0) { c.staggerT -= dt; c.speed *= 0.85; return; }
@@ -5999,7 +6009,15 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
       case 'chase': {
         const P = G.P; if (pc.sees) c.lostT = 0; else c.lostT += dt;
         const tx = pc.sees ? P.pos.x : (c.last ? c.last[0] : P.pos.x), tz = pc.sees ? P.pos.z : (c.last ? c.last[1] : P.pos.z);
-        const d = steer(c, tx, tz, SPEED.chase * (G.P.stunT > 0 ? 1 : 1), dt);
+        // Policier ARMÉ : s'arrête pour viser (0,9 s, ta chance de casser la ligne de vue), tire, 3 balles puis rechargement de 3,5 s
+        if (c.armed && c.ammo === undefined) { c.ammo = 3; c.aimT = 0; c.reloadT = 0; c.fireCD = 0; }
+        let shooting = false;
+        if (c.armed && c.reloadT > 0) { c.reloadT -= dt; if (c.reloadT <= 0) c.ammo = 3; }
+        else if (c.armed && pc.sees && pc.dist > 2.2 && pc.dist < 22 && c.ammo > 0) {
+          shooting = true; c.aimT += dt; face(c, P.pos.x, P.pos.z, dt, 10); c.fireCD -= dt;
+          if (c.aimT > 0.9 && c.fireCD <= 0) { shoot(c, pc.dist); c.ammo--; c.fireCD = 0.7; c.aimT = 0.55; if (c.ammo <= 0) { c.reloadT = 3.5; c.aimT = 0; } }
+        } else if (c.armed) c.aimT = Math.max(0, c.aimT - dt * 2);
+        const d = shooting ? (c.speed *= 0.8, 9) : steer(c, tx, tz, SPEED.chase * (c.reloadT > 0 ? 0.7 : 1), dt);
         if (pc.dist < 1.1 && Math.abs(P.pos.y - c.y) < 1.7 && pc.sees) arrest(c);
         if (c.lostT > 20 || (d < 2.5 && !pc.sees)) { c.state = 'search'; c.searchT = 6; }                  // il court jusqu'à l'endroit où il t'a vu, puis il fouille
         break; }
@@ -6042,6 +6060,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     else { r['sh1'].rotation.x = 0.05 + sw + Math.sin(t * 0.8) * 0.03; r['sh-1'].rotation.x = 0.1 - sw; r['el1'].rotation.x = -0.12 - 0.1 * f; r['el-1'].rotation.x = -0.1 - 0.1 * f; r['sh1'].rotation.z = -0.05; r['sh-1'].rotation.z = 0.05; }
     r['sh1'].rotation.z += jit * 0.08; r['sh-1'].rotation.z -= jit * 0.05;
     if (c.shoutT > 0) { r['sh1'].rotation.x = -1.5; r['el1'].rotation.x = -0.1; }                 // il te désigne du bras
+    if (c.armed && c.aimT > 0.05) { r['sh1'].rotation.x = -1.45; r['el1'].rotation.x = -0.1; r['sh1'].rotation.z = -0.05; }                // il vise
     if (G.arrest && G.arrest.cop === c) { const st = G.arrest.stage; r['sh1'].rotation.x = r['sh-1'].rotation.x = -1.3 + Math.sin(performance.now() / 70) * 0.12 * (st === 'down' ? 1 : 0.2); r['el1'].rotation.x = r['el-1'].rotation.x = -0.3; r.torso.rotation.x = 0.9; r.head.rotation.x = 0.1; }
     // Tête : lourde, en retard sur le corps, penchée ; balayage lent, saccadé quand il se méfie ; rejetée en arrière quand il crie
     const ty = run ? Math.sin(t * 3) * 0.12 : sus ? Math.sin(t * 1.6) * 0.8 + Math.sign(Math.sin(t * 0.9)) * 0.25 : Math.sin(t * 0.45) * 0.5;
@@ -6136,6 +6155,52 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   };
 
   G.loaded.push('cops');
+})();
+
+</script>
+<script>
+/* ---- js/health.js ---- */
+/* =====================================================================
+   health.js : BLESSURES (pas de barre de vie). Dima n'a aucune arme. 2 impacts = mort.
+   1er impact : étourdissement bref, vision qui s'assombrit (douleur), mouvement réduit un moment ; la boiterie RESTE ensuite (conséquence).
+   2e impact : mort -> retour au début du chapitre.
+   Les policiers ARMÉS (cops.js) tirent : 3 balles dans le chargeur, puis rechargement (c'est ta fenêtre pour fuir).
+   ===================================================================== */
+(function () {
+  'use strict';
+  const G = window.G, T = G.T;
+  G.wounds = 0; G.painT = 0; G.limp = false;
+  let ov = null;
+  function overlay() {
+    if (ov) return ov;
+    ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center, rgba(0,0,0,0) 12%, rgba(30,0,0,.55) 55%, rgba(8,0,0,.96) 100%)';
+    document.body.appendChild(ov); return ov;
+  }
+  // Vitesse de déplacement : réduite pendant la douleur (-45 %), puis boiterie permanente légère (-8 %)
+  G.moveScale = function () { return G.painT > 0 ? 0.55 : (G.limp ? 0.92 : 1); };
+  G.hurt = function (from) {
+    if (G.arrest || G.dead || G.completed) return;
+    G.wounds++;
+    const P = G.P, f = G.audio && G.audio.fx;
+    if (f) { f('hit', 1); setTimeout(() => f('pain', 0.9), 120); }
+    if (G.wounds >= 2) { G.die(); return; }
+    G.painT = 7; G.limp = true; P.stunT = Math.max(P.stunT || 0, 0.5); P.kickP = -0.12; P.kickR = (Math.random() - 0.5) * 0.3;
+    if (G.flag) G.flag('wounded', true);
+    G.say('Une brûlure dans la jambe. Ça saigne. Continue de bouger.', 3500);
+    overlay().style.opacity = 1;
+  };
+  G.die = function () {
+    if (G.dead) return; G.dead = true; G.frozen = true; const P = G.P; P.vx = P.vz = 0;
+    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.3s'; f.style.opacity = 1; }
+    overlay().style.opacity = 1;
+    setTimeout(() => { G.dead = false; G.wounds = 0; G.painT = 0; G.limp = !!G.chapterLimpStart; if (G.flag) G.flag('wounded', G.limp); overlay().style.opacity = 0; (G.resetLevel || function () {})(); }, 900);
+  };
+  G.updateHealth = function (dt) {
+    if (G.painT > 0) { G.painT -= dt; if (G.painT <= 0 && ov) ov.style.opacity = 0.35; }             // la douleur retombe, un voile reste
+  };
+  G.resetHealth = function () { G.wounds = 0; G.painT = 0; if (ov) ov.style.opacity = 0; };
+  G.loaded.push('health');
 })();
 
 </script>
@@ -6764,7 +6829,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   G.resetLevel = function () {                                     // arrestation / mort : retour instantané au début du chapitre (l'histoire et les objets trouvés sont conservés)
     G.placeStart(); const P = G.P;
     P.safe.copy(P.pos); P.stunT = 0; P.wallUsed = false; P.dashT = 0; P.dashAir = false; P.slideT = 0; P.coyote = 0;
-    G.have = []; G.hidden = null; slit(false); G.arrest = null; G.frozen = false; G.alert = 0; G.completed = false; G.resetCops();
+    G.have = []; G.hidden = null; slit(false); G.arrest = null; G.frozen = false; G.alert = 0; G.completed = false; G.resetCops(); if (G.resetHealth) G.resetHealth();
     if (G.save) { G.save.deaths++; G.writeSave(); }
     for (const h of G.hides) if (h.anim) h.anim(true);
     for (const fn of G.onReset) fn();
@@ -6849,7 +6914,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
     G.lamps.length = 0; G.interactables.length = 0; G.animated.length = 0; G.onReset.length = 0; if (G.hides) G.hides.length = 0; if (G.cops) G.cops.length = 0; if (G.triggers) G.triggers.length = 0;
     G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
   };
-  G.buildChapter = function (n) { G.buildBase(); G.chapters[n].build(); G.currentChapter = n; };
+  G.buildChapter = function (n) { G.buildBase(); G.chapters[n].build(); G.currentChapter = n; G.limp = G.flag('wounded'); G.chapterLimpStart = G.limp; if (G.resetHealth) G.resetHealth(); };   // la boiterie PERSISTE d'un chapitre à l'autre
   // Passage d'un chapitre à l'autre : fondu au noir, on décharge, on charge, fondu d'ouverture, carte de chapitre
   G.loadChapter = function (n) {
     const f = document.getElementById('fade'); G.frozen = true;
@@ -7181,6 +7246,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
 
     // --- Vitesse voulue et accélération ---
     let speed = P.sprint ? RUN : (wantCrouch && P.mode === 'move') ? CROUCH_SPEED : WALK;
+    if (G.moveScale) speed *= G.moveScale();                                  // blessure : douleur puis boiterie (health.js)
     if (stunned) speed *= 0.35;
     if (P.dashT > 0) { P.dashT -= dt; const f = Math.max(0, P.dashT / 0.22); P.vx = P.dashX * (9 + 7 * f); P.vz = P.dashZ * (9 + 7 * f); }
     else if (P.mode === 'slide') {                                              // glissade : on freine doucement, on dévie un peu
@@ -7581,7 +7647,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = G.clamp((now - last) / 1000, 0, 0.05); last = now; time += dt;   // jamais négatif ni trop grand
-    if (playing && !G.docOpen) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); if (G.updateTriggers) G.updateTriggers(); updateInteract(); }
+    if (playing && !G.docOpen) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); if (G.updateTriggers) G.updateTriggers(); if (G.updateHealth) G.updateHealth(dt); updateInteract(); }
     G.updateCamera(dt, time);
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);
@@ -7604,7 +7670,7 @@ B corps · ! clé USB · X grille fermée · + cachettes · e étals du marché 
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'building', 'levels', 'story', 'chapter2', 'player', 'sfx', 'audio', 'game'];
+  const FILES = ['core', 'gltf', 'render', 'textures', 'physics', 'world', 'city', 'copmodel', 'places', 'dressing', 'cops', 'health', 'building', 'levels', 'story', 'chapter2', 'player', 'sfx', 'audio', 'game'];
   const S = { quality: 'medium', sens: 1, volume: 0.9, music: 0.6, fx: 0.9, chaos: 0.6 };
   // Lecture validée : seules les clés connues, des nombres bornés, une qualité de la liste (on ne fait jamais confiance à ce qui vient du stockage)
   const RANGES = { sens: [0.2, 3], volume: [0, 1], music: [0, 1], fx: [0, 1], chaos: [0, 1] };

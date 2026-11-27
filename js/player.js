@@ -163,6 +163,7 @@
 
     // --- Vitesse voulue et accélération ---
     let speed = P.sprint ? RUN : (wantCrouch && P.mode === 'move') ? CROUCH_SPEED : WALK;
+    if (G.moveScale) speed *= G.moveScale();                                  // blessure : douleur puis boiterie (health.js)
     if (stunned) speed *= 0.35;
     if (P.dashT > 0) { P.dashT -= dt; const f = Math.max(0, P.dashT / 0.22); P.vx = P.dashX * (9 + 7 * f); P.vz = P.dashZ * (9 + 7 * f); }
     else if (P.mode === 'slide') {                                              // glissade : on freine doucement, on dévie un peu

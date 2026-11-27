@@ -140,6 +140,16 @@
   }
   function face(c, tx, tz, dt, rate) { const target = Math.atan2(tx - c.x, tz - c.z); let da = target - c.facing; while (da > Math.PI) da -= 6.283; while (da < -Math.PI) da += 6.283; c.facing += da * Math.min(1, dt * (rate || 4)); c.speed += (0 - c.speed) * Math.min(1, dt * 6); }
 
+  // Tir : touche selon la distance, bien moins si on court / glisse / dash ; une trace lumineuse brève montre la balle
+  function shoot(c, dist) {
+    const P = G.P; snd('fx', 'shot', 1);
+    const moving = P.sprint || P.mode === 'slide' || P.dashT > 0 || P.mode === 'wallrun' || P.mode === 'roll';
+    let p = 0.8 - Math.min(0.5, dist / 40); if (moving) p *= 0.45; if (P.h < 1.5) p *= 0.7; p *= G.shotLuck ? G.shotLuck : 1;
+    const hit = Math.random() < p, tx = P.pos.x + (hit ? 0 : (Math.random() - 0.5) * 1.6), tz = P.pos.z + (hit ? 0 : (Math.random() - 0.5) * 1.6), ty = P.pos.y + 1.1;
+    const sx = c.x + Math.sin(c.facing) * 0.5, sz = c.z + Math.cos(c.facing) * 0.5, g = new T.BufferGeometry().setFromPoints([new T.Vector3(sx, c.y + 1.45, sz), new T.Vector3(tx, ty, tz)]);
+    const ln = new T.Line(g, new T.LineBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0.9, blending: T.AdditiveBlending, fog: false })); G.scene.add(ln); setTimeout(() => { G.scene.remove(ln); g.dispose(); }, 70);
+    if (hit && G.hurt) G.hurt(c);
+  }
   function think(c, dt) {
     if (G.arrest) { if (G.arrest.cop !== c) c.speed *= 0.9; return; }
     if (c.staggerT > 0) { c.staggerT -= dt; c.speed *= 0.85; return; }
@@ -170,7 +180,15 @@
       case 'chase': {
         const P = G.P; if (pc.sees) c.lostT = 0; else c.lostT += dt;
         const tx = pc.sees ? P.pos.x : (c.last ? c.last[0] : P.pos.x), tz = pc.sees ? P.pos.z : (c.last ? c.last[1] : P.pos.z);
-        const d = steer(c, tx, tz, SPEED.chase * (G.P.stunT > 0 ? 1 : 1), dt);
+        // Policier ARMÉ : s'arrête pour viser (0,9 s, ta chance de casser la ligne de vue), tire, 3 balles puis rechargement de 3,5 s
+        if (c.armed && c.ammo === undefined) { c.ammo = 3; c.aimT = 0; c.reloadT = 0; c.fireCD = 0; }
+        let shooting = false;
+        if (c.armed && c.reloadT > 0) { c.reloadT -= dt; if (c.reloadT <= 0) c.ammo = 3; }
+        else if (c.armed && pc.sees && pc.dist > 2.2 && pc.dist < 22 && c.ammo > 0) {
+          shooting = true; c.aimT += dt; face(c, P.pos.x, P.pos.z, dt, 10); c.fireCD -= dt;
+          if (c.aimT > 0.9 && c.fireCD <= 0) { shoot(c, pc.dist); c.ammo--; c.fireCD = 0.7; c.aimT = 0.55; if (c.ammo <= 0) { c.reloadT = 3.5; c.aimT = 0; } }
+        } else if (c.armed) c.aimT = Math.max(0, c.aimT - dt * 2);
+        const d = shooting ? (c.speed *= 0.8, 9) : steer(c, tx, tz, SPEED.chase * (c.reloadT > 0 ? 0.7 : 1), dt);
         if (pc.dist < 1.1 && Math.abs(P.pos.y - c.y) < 1.7 && pc.sees) arrest(c);
         if (c.lostT > 20 || (d < 2.5 && !pc.sees)) { c.state = 'search'; c.searchT = 6; }                  // il court jusqu'à l'endroit où il t'a vu, puis il fouille
         break; }
@@ -213,6 +231,7 @@
     else { r['sh1'].rotation.x = 0.05 + sw + Math.sin(t * 0.8) * 0.03; r['sh-1'].rotation.x = 0.1 - sw; r['el1'].rotation.x = -0.12 - 0.1 * f; r['el-1'].rotation.x = -0.1 - 0.1 * f; r['sh1'].rotation.z = -0.05; r['sh-1'].rotation.z = 0.05; }
     r['sh1'].rotation.z += jit * 0.08; r['sh-1'].rotation.z -= jit * 0.05;
     if (c.shoutT > 0) { r['sh1'].rotation.x = -1.5; r['el1'].rotation.x = -0.1; }                 // il te désigne du bras
+    if (c.armed && c.aimT > 0.05) { r['sh1'].rotation.x = -1.45; r['el1'].rotation.x = -0.1; r['sh1'].rotation.z = -0.05; }                // il vise
     if (G.arrest && G.arrest.cop === c) { const st = G.arrest.stage; r['sh1'].rotation.x = r['sh-1'].rotation.x = -1.3 + Math.sin(performance.now() / 70) * 0.12 * (st === 'down' ? 1 : 0.2); r['el1'].rotation.x = r['el-1'].rotation.x = -0.3; r.torso.rotation.x = 0.9; r.head.rotation.x = 0.1; }
     // Tête : lourde, en retard sur le corps, penchée ; balayage lent, saccadé quand il se méfie ; rejetée en arrière quand il crie
     const ty = run ? Math.sin(t * 3) * 0.12 : sus ? Math.sin(t * 1.6) * 0.8 + Math.sign(Math.sin(t * 0.9)) * 0.25 : Math.sin(t * 0.45) * 0.5;
