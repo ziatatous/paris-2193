@@ -10,6 +10,7 @@
   const RISE = 0.1875, RUN = 0.275;
   const ph = (c, s, sp) => new T.MeshPhongMaterial({ color: c, shininess: s === undefined ? 4 : s, specular: sp === undefined ? 0x111111 : sp });
   const box = (x0, x1, y0, y1, z0, z1, mat, o) => G.B(x0, x1, y0, y1, z0, z1, mat, Object.assign({ grime: false }, o || {}));
+  let _blk = null; const mats0 = () => _blk || (_blk = { black: ph(0x020303, 1, 0x000000) });
   const mesh = (geo, mat, x, y, z, ry) => { const q = new T.Mesh(geo, mat); q.position.set(x, y, z); if (ry) q.rotation.y = ry; G.scene.add(q); return q; };
 
   G.buildBuilding = function () {
@@ -35,7 +36,7 @@
     const doorMat = ph(0x2a2c2b, 12), frame = ph(0x151716, 6);
     const nums = { 3: ['11', '12'], 6: ['21', '22'], 9: ['31', '32'] };
     for (const yf of [3, 6, 9]) [[22.8, 23.8, 0], [24.4, 25.4, 1]].forEach(([a, b, k]) => {
-      box(PX0 + 0.08, PX0 + 0.16, yf, yf + 2.1, a + 0.05, b - 0.05, doorMat, { collide: false });
+      if (!(yf === 6 && k === 1)) box(PX0 + 0.08, PX0 + 0.16, yf, yf + 2.1, a + 0.05, b - 0.05, doorMat, { collide: false });   // (la porte 22 de l'étage 2 est animée plus bas : la voisine)
       box(PX0 - 0.02, PX0 + 0.1, yf, yf + 2.17, a - 0.06, a, frame, { collide: false }); box(PX0 - 0.02, PX0 + 0.1, yf, yf + 2.17, b, b + 0.06, frame, { collide: false }); box(PX0 - 0.02, PX0 + 0.1, yf + 2.15, yf + 2.2, a - 0.06, b + 0.06, frame, { collide: false });
       box(PX0 + 0.04, PX0 + 0.09, yf + 1.55, yf + 1.7, (a + b) / 2 - 0.1, (a + b) / 2 + 0.1, ph(0x8a8d86, 30), { collide: false });                 // plaque
       box(PX0 + 0.04, PX0 + 0.09, yf + 1.05, yf + 1.12, b - 0.25, b - 0.12, ph(0x6a6d70, 60), { collide: false });                                  // poignée
@@ -44,6 +45,24 @@
     });
     // porte de l'appartement : cadre + vantail ouvert à 80°
     box(PX0 - 0.02, PX1 + 0.02, AY, AY + 2.25, 22.94, 23.0, frame, { collide: false }); box(PX0 - 0.02, PX1 + 0.02, AY, AY + 2.25, 24.1, 24.16, frame, { collide: false }); box(PX0 - 0.02, PX1 + 0.02, AY + 2.2, AY + 2.27, 22.94, 24.16, frame, { collide: false });
+    // ---------- LA VOISINE (étage 2, porte 22) : quand Dima passe sur le palier, la porte s'entrouvre, deux yeux dans le noir, une voix ----------
+    {
+      const yf = 6, a = 24.4, b = 25.4;
+      box(PX0 + 0.0, PX1, yf, yf + 2.15, a + 0.02, b - 0.02, mats0().black, { collide: false });                           // le noir derrière la porte
+      const leaf = new T.Group(); leaf.position.set(PX0 + 0.09, yf, b - 0.05); G.scene.add(leaf);                            // charnière côté sud
+      const slab = new T.Mesh(new T.BoxGeometry(0.07, 2.1, 0.9), doorMat); slab.position.set(0, 1.05, -0.45); leaf.add(slab);
+      const eyeM = new T.MeshBasicMaterial({ color: 0xe8e8d0 });
+      const eyes = new T.Group(); for (const dz of [-0.05, 0.05]) { const e = new T.Mesh(new T.SphereGeometry(0.014, 6, 5), eyeM); e.position.set(0, 0, dz); eyes.add(e); } eyes.position.set(PX0 + 0.12, yf + 1.52, (a + b) / 2 + 0.05); eyes.visible = false; G.scene.add(eyes);
+      const st = { open: 0, target: 0 };
+      G.animated.push({ update(dt) { st.open += (st.target - st.open) * Math.min(1, dt * 1.6); leaf.rotation.y = st.open * 0.42; eyes.visible = st.open > 0.5 && st.target > 0; } });   // le battant pivote vers le palier (0,42 rad)
+      const lines = [[0, '…Dima ?'], [2600, '« Tu sors à cette heure-ci… Va. Je veille sur Mila. »'], [6800, '« Mais reviens avant la nuit. Pour elle. »']];
+      const trig = G.addTrigger(p => Math.abs(p.pos.y - yf) < 1.6 && p.pos.x > 3.3 && p.pos.x < 6.9 && p.pos.z > Z0 + WT && p.pos.z < 25.9, () => {
+        st.target = 1; const f = G.audio && G.audio.fx; if (f) f('door', 0.7);
+        for (const [t, txt] of lines) setTimeout(() => { if (st.target > 0) G.say(txt, 2800); }, t);
+        setTimeout(() => { st.target = 0; const f2 = G.audio && G.audio.fx; if (f2) f2('door', 0.5); }, 10500);
+      });
+      trig.reset = () => { st.target = 0; st.open = 0; };
+    }
     // ---------- Masse pleine des voisins (de y=3 à l'appartement) ; sol parqué de l'appartement ----------
     box(PX1, X1 - WT, 3, AY - 0.1, Z0 + WT, Z1 - WT, CD);
     box(PX1, X1 - WT, AY - 0.1, AY, Z0 + WT, Z1 - WT, M().floor, { tile: 2 });

@@ -192,7 +192,7 @@
   /* ---------------------------------------------------------------
      NIVEAU 1
      --------------------------------------------------------------- */
-  const START = [8.4, 12, 25.4];
+  const START = [8.4, 12, 25.4]; G.startPos = START;
   /* Plan du niveau 1 (1 caractère = 1 m ; x = colonne, z = ligne). # mur · . libre · = passage couvert · T/D tour · G grille · lettres = repères sur sol libre */
   const MAP = [
     '################################################################',
@@ -232,7 +232,7 @@
   ];
   const FREE = '.=BLWFcXN';
   const cell = (c, r) => (r >= 0 && r < MAP.length && c >= 0 && c < MAP[0].length) ? MAP[r][c] : '#';
-  G.placeStart = function () { const P = G.P; P.pos.set(START[0], START[1], START[2]); P.safe.set(START[0], START[1], START[2]); P.yaw = 0; P.pitch = 0; P.eye = START[1] + 1.62; };
+  G.placeStart = function () { const S = G.startPos, P = G.P; P.pos.set(S[0], S[1], S[2]); P.safe.set(S[0], S[1], S[2]); P.yaw = S[3] || 0; P.pitch = 0; P.vx = P.vy = P.vz = 0; P.mode = 'move'; P.anim = null; P.onGround = true; P.h = 1.75; P.eye = S[1] + 1.62; };
 
   // Décor automatique d'une face de mur : fenêtres sur 3 étages, une porte / un rideau de fer / une fenêtre condamnée au sol
   function featsFor(L, covered, special) {
@@ -254,7 +254,7 @@
   }
 
   G.buildLevel1 = function () {
-    G.have = []; G.objective = 'La clé USB est sur la table de nuit. Prends-la, puis descends.';
+    G.have = []; G.objective = G.chapterObjective = 'La clé USB est sur la table de nuit. Prends-la, puis descends.';
     G.isPlayable = null;                                                                  // filet de la grande carte : inutile ici
     G.zoneAt = p => (p.x > 3.3 && p.x < 11.7 && p.z > 22.3 && p.z < 29.7) ? 'in' : 'out';
     G.beginBatch();
@@ -306,6 +306,10 @@
     for (const [x, z, s, h, ry] of [[5.5, 16.5, 1.0, 0.9, 0.2], [6.55, 16.7, 0.9, 0.9, 0.5], [9.5, 20.5, 1.0, 0.9, 0], [8.0, 18.7, 0.9, 0.7, 0.4], [4.8, 18.4, 1.0, 0.9, 0.1], [10.5, 17.5, 0.9, 0.9, 0.3],
       [15.5, 18.5, 1.0, 0.9, 0.2], [13.2, 17.45, 0.9, 0.9, 0], [21.5, 11.5, 1.0, 0.9, 0.3], [36.5, 8.5, 1.0, 0.9, 0.2], [41.5, 11.5, 1.0, 0.9, 0.4], [45.5, 19.6, 1.0, 0.9, 0], [41.5, 20.4, 0.9, 0.9, 0.3], [24.5, 8.6, 0.9, 0.9, 0.2]]) crate(x, z, s, h, ry);
     barrel(11.4, 15.5); barrel(3.5, 15.6); barrel(12.8, 19.5); barrel(33.4, 9.4);
+    // ---- Le corps dans la cour (première peur : on n'est pas seuls) ----
+    G.buildBody(10.7, 19.6, 1.25);
+    G.interactables.push({ id: 'corps', pos: new T.Vector3(10.4, 0.4, 19.9), radius: 2.0, prompt: 'Examiner le corps',
+      use() { G.collect('corps_cour', 'LE CORPS', 'Un homme du quartier. Il tient une clé USB dans la main, comme toi.\nDans sa poche, une liste de prénoms d\'enfants, froissée.\nLa moitié est barrée au crayon.\n\nTu la laisses où elle est. Tes mains tremblent.'); } });
     // ---- Câbles, linge, désordre ----
     clutter([{ x0: 3.4, x1: 11.6, z0: 15.2, z1: 21.8, n: 70 }, { x0: 12.2, x1: 21.8, z0: 17.2, z1: 19.8, n: 25 }, { x0: 20.3, x1: 22.7, z0: 8.3, z1: 16.8, n: 20 }, { x0: 23.5, x1: 33.5, z0: 8.2, z1: 9.4, n: 20 }, { x0: 34.2, x1: 42.8, z0: 6.2, z1: 12.8, n: 30 }, { x0: 38.2, x1: 52.8, z0: 19.2, z1: 20.8, n: 25 }, { x0: 57.3, x1: 61.7, z0: 16.3, z1: 22.7, n: 18 }]);
     flushDecals();
@@ -397,21 +401,17 @@
   /* ---------------------------------------------------------------
      REMISE À ZÉRO INSTANTANÉE (arrestation) et FIN DE NIVEAU
      --------------------------------------------------------------- */
-  G.resetLevel = function () {
-    const P = G.P; P.pos.set(START[0], START[1], START[2]); P.yaw = 0; P.pitch = 0; P.vx = P.vy = P.vz = 0; P.mode = 'move'; P.anim = null; P.onGround = true; P.h = 1.75; P.stunT = 0; P.eye = START[1] + 1.62;
-    P.safe.set(START[0], START[1], START[2]); P.wallUsed = false; P.dashT = 0; P.dashAir = false; P.slideT = 0; P.coyote = 0;
+  G.resetLevel = function () {                                     // arrestation / mort : retour instantané au début du chapitre (l'histoire et les objets trouvés sont conservés)
+    G.placeStart(); const P = G.P;
+    P.safe.copy(P.pos); P.stunT = 0; P.wallUsed = false; P.dashT = 0; P.dashAir = false; P.slideT = 0; P.coyote = 0;
     G.have = []; G.hidden = null; slit(false); G.arrest = null; G.frozen = false; G.alert = 0; G.completed = false; G.resetCops();
+    if (G.save) { G.save.deaths++; G.writeSave(); }
     for (const h of G.hides) if (h.anim) h.anim(true);
     for (const fn of G.onReset) fn();
-    G.objective = 'La clé USB est près du lit. Prends-la, puis descends.';
+    G.objective = G.chapterObjective || '';
     const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 0.45s'; f.style.opacity = 0; }
   };
-  G.levelComplete = function () {
-    if (G.completed) return; G.completed = true; G.frozen = true;
-    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 1.2s'; f.style.opacity = 1; }
-    G.say('Livré.', 1500); const fx = G.audio && G.audio.fx; if (fx) fx('deliver', 1);
-    setTimeout(() => { if (G.endLevelScreen) G.endLevelScreen('NIVEAU 1 TERMINÉ', 'la suite arrive · cliquer pour rejouer'); }, 1500);
-  };
+  G.levelComplete = function () { G.completeChapter(G.currentChapter || 1); };
 
   G.facade = facade; G.cable = cable;
   G.loaded.push('levels');

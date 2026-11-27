@@ -50,5 +50,39 @@
     d.append(a, b); document.body.appendChild(d);
     requestAnimationFrame(() => { d.style.opacity = 1; }); setTimeout(() => { d.style.opacity = 0; }, 3200); setTimeout(() => d.remove(), 5200);
   };
+
+  // --- ZONES / CHAPITRES : un seul chapitre est chargé à la fois (le précédent est vidé de la mémoire) ---
+  G.chapters = {
+    1: { name: 'Chez nous', build() { G.buildLevel1(); } }
+  };
+  G.currentChapter = 0;
+  // Déclencheurs d'événements (scènes scriptées) : test(P) vrai -> fire() une seule fois ; réarmés quand on recommence le chapitre
+  G.triggers = [];
+  G.addTrigger = function (test, fire) { const t = { test, fire, done: false }; G.triggers.push(t); G.onReset.push(() => { t.done = false; if (t.reset) t.reset(); }); return t; };
+  G.updateTriggers = function () { for (const t of G.triggers) if (!t.done && t.test(G.P)) { t.done = true; t.fire(); } };
+  G.clearZone = function () {                                    // vide tout ce qui appartient au chapitre en cours
+    const sc = G.scene; sc.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    for (const c of sc.children.slice()) sc.remove(c);
+    G.lamps.length = 0; G.interactables.length = 0; G.animated.length = 0; G.onReset.length = 0; if (G.hides) G.hides.length = 0; if (G.cops) G.cops.length = 0; if (G.triggers) G.triggers.length = 0;
+    G.navGrid = null; G.hidden = null; G.focus = null; G.arrest = null; G.alert = 0; G.have = []; G.clearColliders();
+  };
+  G.buildChapter = function (n) { G.buildBase(); G.chapters[n].build(); G.currentChapter = n; };
+  // Passage d'un chapitre à l'autre : fondu au noir, on décharge, on charge, fondu d'ouverture, carte de chapitre
+  G.loadChapter = function (n) {
+    const f = document.getElementById('fade'); G.frozen = true;
+    if (f) { f.style.transition = 'opacity 0.9s'; f.style.opacity = 1; }
+    setTimeout(() => {
+      G.clearZone(); G.buildChapter(n); G.placeStart(); G.completed = false; G.frozen = false; G.save.chapter = n; G.writeSave();
+      if (f) { f.style.transition = 'opacity 1.4s'; f.style.opacity = 0; }
+      G.chapterCard(n, G.chapters[n].name); if (G.objective) setTimeout(() => G.say(G.objective, 6000), 5000);
+    }, 1000);
+  };
+  G.completeChapter = function (n) {
+    if (G.completed) return; G.completed = true; G.frozen = true;
+    const f = document.getElementById('fade'); if (f) { f.style.transition = 'opacity 1.2s'; f.style.opacity = 1; }
+    const fx = G.audio && G.audio.fx; if (fx) fx('deliver', 1);
+    if (G.chapters[n + 1]) { G.save.chapter = n + 1; G.writeSave(); setTimeout(() => { G.completed = false; G.loadChapter(n + 1); }, 1500); }
+    else setTimeout(() => { if (G.endLevelScreen) G.endLevelScreen('À SUIVRE', 'la suite arrive · cliquer pour rejouer le chapitre'); }, 1500);
+  };
   G.loaded.push('story');
 })();

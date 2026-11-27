@@ -25,7 +25,7 @@
     if (G.loadCopModel) { progress(0.3, 'Modèle du policier'); await G.loadCopModel(); }
     if (G.mode === 'sandbox') { progress(0.5, 'Grande carte (ancienne)'); G.buildWorld(); await tick(); progress(0.85, 'Police'); G.initCops(); }
     else if (G.mode === 'lab') { progress(0.5, 'Labo policier'); G.buildBase(); G.buildLab(); await tick(); }
-    else { progress(0.5, 'Niveau 1 : chez nous'); G.buildBase(); G.buildLevel1(); await tick(); }
+    else { progress(0.5, 'Niveau 1 : chez nous'); G.buildChapter(G.save.chapter || 1); await tick(); }
     progress(0.9, 'Joueur'); G.initPlayer(); if (G.mode === 'level' && G.placeStart) G.placeStart();
     if (G.mode === 'lab') { G.P.pos.set(0, 0, 4); G.P.safe.set(0, 0, 4); G.P.eye = 1.62; } G.updateLamps(0, 0); G.render(0);
     progress(1, 'Prêt');
@@ -50,6 +50,7 @@
     setTimeout(() => { t.style.opacity = 0; }, 3400);
     setTimeout(() => { f.style.transition = 'opacity 5s ease-out'; f.style.opacity = 0; }, 4200);
     setTimeout(() => { const h = el('hint'); h.style.opacity = 1; setTimeout(() => { h.style.opacity = 0; }, 9000); }, 9500);
+    if (G.chapterCard && G.currentChapter) setTimeout(() => G.chapterCard(G.currentChapter, G.chapters[G.currentChapter].name), 5200);
     setTimeout(() => { if (G.objective) G.say(G.objective, 6000); }, 13000);
   }
 
@@ -103,7 +104,7 @@
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = G.clamp((now - last) / 1000, 0, 0.05); last = now; time += dt;   // jamais négatif ni trop grand
-    if (playing && !G.docOpen) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); updateInteract(); }
+    if (playing && !G.docOpen) { if (!G.frozen) G.updatePlayer(dt); if (G.hidden) updateHidden(dt); G.updateCops(dt); if (G.updateTriggers) G.updateTriggers(); updateInteract(); }
     G.updateCamera(dt, time);
     for (const a of G.animated) a.update(dt);
     G.updateLamps(dt, time);

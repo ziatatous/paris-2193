@@ -15,6 +15,8 @@
   let stamp = 0;
   const key = (i, j) => (i + OFF) * 8192 + (j + OFF);
 
+  G.clearColliders = function () { G.colliders.length = 0; grid.clear(); };     // changement de zone : on repart d'un monde vide
+
   function insert(c) {
     G.colliders.push(c);
     for (let i = Math.floor(c.minX / CELL); i <= Math.floor(c.maxX / CELL); i++)
