@@ -2,10 +2,11 @@
 const { launch } = require('./harness');
 (async () => {
   const g = await launch({});
-  const r = await g.eval(async () => {
+  const STOP = process.env.STOP_AFTER_2 === '1';
+  const r = await g.eval(async (process_stop) => {
     const P = G.P, out = { chapters: [] }, sleep = ms => new Promise(r => setTimeout(r, ms));
     const step = n => { for (let i = 0; i < n; i++) { G.updatePlayer(0.03); G.updateCops(0.03); for (const a of G.animated) a.update(0.03); G.updateTriggers(); } };
-    const walk = W => { let wi = 0; G.keys = { KeyW: true, ShiftLeft: true }; for (let t = 0; t < 9000 && wi < W.length; t++) { const [tx, tz] = W[wi], dx = tx - P.pos.x, dz = tz - P.pos.z; P.yaw = Math.atan2(-dx, -dz); G.keys.Space = (t % 50 === 0); step(1); if (Math.hypot(dx, dz) < 0.65) wi++; } G.keys = {}; step(2); return wi >= W.length; };
+    const walk = W => { let wi = 0; G.keys = { KeyW: true, ShiftLeft: true }; for (let t = 0; t < 9000 && wi < W.length; t++) { const [tx, tz] = W[wi], dx = tx - P.pos.x, dz = tz - P.pos.z; P.yaw = Math.atan2(-dx, -dz); G.keys.Space = (t % 50 === 0); step(1); if (Math.hypot(dx, dz) < 0.65) wi++; } G.keys = {}; step(2); walk.last = { wi, of: W.length, x: +P.pos.x.toFixed(1), z: +P.pos.z.toFixed(1), mode: P.mode, hidden: !!G.hidden, stun: +(P.stunT || 0).toFixed(2) }; return wi >= W.length; };
     const use = id => { const it = G.interactables.find(i => i.id === id); if (!it) return false; it.use(); if (G.docOpen) G.closeDoc(); return true; };
     const waitChapter = async n => { for (let i = 0; i < 80 && G.currentChapter !== n; i++) await sleep(100); await sleep(1500); G.cops.length = 0; return G.currentChapter === n && !G.frozen; };
     const E = -Math.PI / 2;
@@ -16,6 +17,7 @@ const { launch } = require('./harness');
     // ---- chapitre 2
     use('key_terminal'); await sleep(1300);
     out.c2 = walk([[9.5, 20.5], [12, 18.5], [15, 18.5], [20, 18.5], [28, 18.5], [34, 18.5], [35.5, 15], [35.5, 9], [37, 7.6], [46, 7.6], [46.5, 12], [46.5, 15.5], [48, 18.5], [52, 18.5], [54.5, 18.5]]);
+    out.c2info = walk.last; if (process_stop) return out;
     use('sortie'); out.chapters.push(await waitChapter(3));
     // ---- chapitre 3
     const tp = (x, y, z) => { P.pos.set(x, y, z); P.safe.copy(P.pos); P.yaw = E; P.pitch = 0; P.vx = P.vy = P.vz = 0; P.mode = 'move'; P.onGround = true; G.keys = { KeyW: true, ShiftLeft: true }; step(2); };
@@ -30,7 +32,7 @@ const { launch } = require('./harness');
     await sleep(12600); step(10); G.roman.frozenLab = true;
     out.c4d = walk([[40, 18.5], [45, 18.5], [50, 18.5], [54, 18.5], [57.5, 18.5], [59, 20]]); step(30); use('lena'); use('fin_a'); out.ended = G.ended; out.deaths = G.save.deaths; out.collected = G.save.collect.length;
     return out;
-  });
+  }, STOP);
   console.log(JSON.stringify(r)); console.log('erreurs:', g.errors.length ? g.errors : 'aucune');
   const ok = r.c1 && r.chapters.every(Boolean) && r.chapters.length === 3 && r.c2 && r.c3a && r.c3b && r.c3c && r.c3d && r.c4a && r.c4b && r.c4c && r.c4d && r.ended && !g.errors.length;
   console.log(ok ? 'PARTIE COMPLÈTE : OK' : 'PARTIE COMPLÈTE : ÉCHEC'); await g.close(); process.exit(ok ? 0 : 1);
