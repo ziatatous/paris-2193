@@ -187,3 +187,11 @@ Voir `docs/PLAN-24H.md` et `docs/HISTOIRE.md` (histoire Dima/Mila/Roman, 4 chapi
 - **Tests** (`tests/`, lancer avec node, chacun 1-4 min) : `smoke`, `save_test`, `sfx_test`, `cops_sim`, `shooting_test`, `parkour2_test`, `chapter1_bot`, `chapter2_bot`, `chapter3_bot`, `chapter4_bot`, `chapters_flow`, `perf`, `shots` (captures). Le banc `harness.js` ouvre `dist/paris2193.html#dev` (les boutons de dev ne sont visibles qu'avec `#dev`).
 - **Roman** (`c.roman`, `speedMul` 0,62, `keen` 1,35) tue au contact (pas d'arrestation) ; flics armés (`c.armed`) tirent : 3 balles, visée 0,9 s, rechargement 3,5 s ; leash sur les toits.
 - Revue de sécurité par sous-agent : 0 critique/moyen ; 6 faibles corrigés.
+
+## ÉTAT DU 28/11 (v27) — à lire en premier à la reprise
+- **Jeu complet** : 4 chapitres + 2 fins (`docs/HISTOIRE.md`), menu Continuer/Nouvelle partie, journal (Tab), option « Assistance » (policiers moins attentifs), documents à collectionner (Mila, Roman, Samuel, technicien, registre, corps…).
+- **Fichiers clés ajoutés depuis** : `health.js` (blessures), `parkour2.js` (barres/échelles), `chapter2/3/4.js`, `story.js` (zones, sauvegarde, fins, journal, `G.later` = minuteur lié au chapitre).
+- **Équilibrage** : flics = alerte progressive (gain 0,35 + proximité, portée de vue 17 m, ouïe 1/3/8/12 m), Roman `speedMul 1,15` (rattrape qui marche, perd qui court), armés = 3 balles/visée 0,9 s/rechargement 3,5 s.
+- **Tests** (`tests/`) : `full_run` (partie complète 1→4, ~8 min, LE test d'acceptation), `chapter1..4_bot`, `chapters_flow`, `reset_state_test`, `shooting_test`, `parkour2_test`, `roman_test`, `journal_test`, `sfx_test`, `save_test`, `perf`, `cops_sim`, `stealth_test` (indicatif seulement : les bots jouent mal), `shots` (captures ; `CHAPTER=n KEEP_COPS=1`).
+- **Règle apprise** : toute modification de gameplay -> relancer `full_run` ; un bot qui se bloque révèle souvent un vrai défaut de conception (ex. étal qui fermait un passage).
+- **À valider par l'utilisateur** : le ressenti (peur, attachement), la difficulté de la furtivité au marché, les sons générés, les stickmen (provisoires).
