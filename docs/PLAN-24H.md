@@ -18,13 +18,13 @@ Règle d'or (leçon de la pause) : **petites étapes, vérifiées à l'écran (c
 - **Combat** : **aucune arme pour le joueur, jamais.** Fuite, cachettes, esquive, parkour. Les flics armés tirent (3 balles, 2 impacts = mort).
 
 ## Jalons (heures depuis le début)
-- [~] **H0-2 Fondations & triage** (fait : three.js local, CSP, sauvegarde validée + test, chambre refaite sobre avec Mila/dessins/mots/veilleuse, halo de lampe des flics, banc d'essai tests/ ; reste : écran de chapitre/G.chapters, bot de parcours, test des flics) : corriger la chambre (lit/porte, câbles), flics (test de simulation), three.js local + CSP, système de sauvegarde, structure « chapitres » (G.chapters), écran de chapitre, objectifs.
+- [x] **H0-2 Fondations & triage** (fait : three.js local, CSP, sauvegarde validée + test, chambre refaite sobre avec Mila/dessins/mots/veilleuse, halo de lampe des flics, banc d'essai tests/ ; reste : écran de chapitre/G.chapters, bot de parcours, test des flics) : corriger la chambre (lit/porte, câbles), flics (test de simulation), three.js local + CSP, système de sauvegarde, structure « chapitres » (G.chapters), écran de chapitre, objectifs.
 - [x] **H2-5 Chapitre 1 fini** (fait : chapitres/zones déchargées, voisine, corps, mots/dessins, bot `tests/chapter1_bot.js` OK) : appartement sobre (dessins de Mila, mot, 6 collectibles max), escalier gardé, voisin, cour, ruelles ; narration (dictaphone) ; test bot.
-- [~] **H5-9 Chapitre 2 « Le marché »** (fait : carte, étals, 3 patrouilles, Samuel/coup de feu, grille + boucle nord, Roman au loin, sortie ; bot OK ; reste : réglage de la furtivité, captures, Roman poursuivant) : plan ASCII (à ma charge), étals, patrouilles x3, Roman (apparition scriptée), cachettes ; test bot.
+- [x] **H5-9 Chapitre 2 « Le marché »** (fait : carte, étals, 3 patrouilles, Samuel/coup de feu, grille + boucle nord, Roman au loin, sortie ; bot OK ; reste : réglage de la furtivité, captures, Roman poursuivant) : plan ASCII (à ma charge), étals, patrouilles x3, Roman (apparition scriptée), cachettes ; test bot.
 - [x] **H9-13 Chapitre 3 « Les toits »** (fait : 5 toits, saut/barre/échelle/saut avec dash, drone-projecteur, 2 flics armés avec fenêtre de rechargement, terminal du registre ; bot `tests/chapter3_bot.js` OK ; blessures `js/health.js`, barres/échelles `js/parkour2.js`) : parkour (sauts/murs/barres), drone, flics armés (3 balles, 2 impacts = mort, étourdissement), le registre ; test bot.
 - [x] **H13-17 Chapitre 4 « Égouts & garage »** (fait : égouts, volant + vanne + grille, Roman tueur (conduit), garage = pièce sûre, Léna, Mila, 2 fins ; bot `tests/chapter4_bot.js` OK) : poursuite de Roman, pièce sûre, voiture, 2 fins ; test bot.
-- [ ] **H17-21 Finition** : menu, options, accessibilité, **FX sonores générés par code (moteur Web Audio, à commencer dès que possible : peur = son)**, perf, effets de peur (écran, souffle, cœur), écran de fin/crédits.
-- [ ] **H21-24 Recette** : QA complète, revue sécurité, correction des bugs, publication finale, CLAUDE.md à jour.
+- [x] **H17-21 Finition** : menu, options, accessibilité, **FX sonores générés par code (moteur Web Audio, à commencer dès que possible : peur = son)**, perf, effets de peur (écran, souffle, cœur), écran de fin/crédits.
+- [x] **H21-24 Recette** (voir docs/BILAN.md) : QA complète, revue sécurité, correction des bugs, publication finale, CLAUDE.md à jour.
 
 ## Organisation (agents)
 - Tâche récurrente (toutes les heures, dans cette session) : « lire ce plan, faire le prochain jalon, tester, commiter, publier, cocher ».
@@ -43,3 +43,4 @@ Règle d'or (leçon de la pause) : **petites étapes, vérifiées à l'écran (c
 - 2026-11-28 00:10 : `tests/full_run.js` (partie complète 1->4 avec transitions réelles) OK ; il a révélé un étal qui fermait l'entrée de la boucle nord du marché (déplacé). Version 25.
 - 2026-11-28 02:00 : réglage de la furtivité (alerte progressive, portée 17 m, ronde du marché décalée, étals avec couloir de glisse) ; option d'ASSISTANCE dans le menu (policiers moins attentifs) pour que le joueur règle la difficulté ; `tests/stealth_test.js` (bots) = mesure indicative seulement.
 - 2026-11-28 05:00 : 3e revue (cas limites) : 7 corrections dont la vanne du ch4 qui ne pouvait pas être refermée depuis l'est (bots l'appelaient directement : test renforcé avec la vraie portée) ; Roman apparaît 8 s après le volant. `full_run` OK. Version 28.
+- 2026-11-28 00:40 : recette finale faite (tests, 3 revues, sécurité), `docs/BILAN.md` écrit. Tâche horaire arrêtée (plus de jalon à avancer sans retours du joueur).
